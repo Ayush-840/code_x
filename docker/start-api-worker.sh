@@ -2,6 +2,7 @@
 set -e
 
 echo "[start] Running migrations..."
+# Run as root to allow prisma to download engines
 ./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 echo "[start] Starting API + Worker combined..."
