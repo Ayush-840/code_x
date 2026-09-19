@@ -10,18 +10,8 @@ COPY packages/retrieval/pyproject.toml /tmp/retrieval/
 COPY packages/generation/pyproject.toml /tmp/generation/
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
 
-# Extract dependencies with debug output
-RUN python3 -c "
-import tomllib
-for svc in ['analysis','retrieval','generation','mock-interview']:
-    with open(f'/tmp/{svc}/pyproject.toml','rb') as f:
-        data = tomllib.load(f)
-    deps = data.get('tool',{}).get('poetry',{}).get('dependencies',{})
-    reqs = [f'{k}{v}' for k,v in deps.items() if k!='python']
-    with open(f'/tmp/{svc}/requirements.txt','w') as out:
-        out.write('\n'.join(reqs) + '\n')
-    print(f'{svc}: {reqs}')
-"
+# Write extraction script to file to avoid Docker parsing issues
+RUN printf 'import tomllib\nfor svc in ["analysis","retrieval","generation","mock-interview"]:\n  with open(f"/tmp/{svc}/pyproject.toml","rb") as f:\n    data = tomllib.load(f)\n  deps = data.get("tool",{}).get("poetry",{}).get("dependencies",{})\n  reqs = [f"{k}{v}" for k,v in deps.items() if k!="python"]\n  with open(f"/tmp/{svc}/requirements.txt","w") as out:\n    out.write("\\n".join(reqs) + "\\n")\n  print(f"{svc}: {reqs}")\n' > /tmp/extract_reqs.py && python3 /tmp/extract_reqs.py
 
 RUN cat /tmp/analysis/requirements.txt && cat /tmp/retrieval/requirements.txt
 
