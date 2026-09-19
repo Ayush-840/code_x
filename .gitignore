@@ -16,3 +16,4 @@ packages/database/generated/
 .turbo/
 *.tsbuildinfo
 .venv/
+.vercel
