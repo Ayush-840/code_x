@@ -13,17 +13,7 @@ COPY packages/generation/pyproject.toml /tmp/generation/
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
 
 # Extract dependencies from pyproject.toml and install
-RUN python3 -c "
-import tomllib, sys
-for svc in ['analysis', 'retrieval', 'generation', 'mock-interview']:
-    with open(f'/tmp/{svc}/pyproject.toml', 'rb') as f:
-        data = tomllib.load(f)
-    deps = data.get('tool', {}).get('poetry', {}).get('dependencies', {})
-    with open(f'/tmp/{svc}/requirements.txt', 'w') as out:
-        for k, v in deps.items():
-            if k != 'python':
-                out.write(f'{k}{v}\n')
-"
+RUN python3 -c "import tomllib, sys; [open(f'/tmp/{s}/requirements.txt','w').write('\n'.join(f'{k}{v}' for k,v in tomllib.load(open(f'/tmp/{s}/pyproject.toml','rb')).get('tool',{}).get('poetry',{}).get('dependencies',{}).items() if k!='python')) for s in ['analysis','retrieval','generation','mock-interview']]"
 
 RUN pip install --no-cache-dir \
     -r /tmp/analysis/requirements.txt \
