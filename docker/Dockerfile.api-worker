@@ -39,4 +39,5 @@ RUN chmod +x /start.sh
 
 USER apiuser
 EXPOSE 4000
+ENTRYPOINT []
 CMD ["/start.sh"]

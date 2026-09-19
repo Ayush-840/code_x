@@ -29,4 +29,5 @@ COPY --from=builder --chown=worker:nodejs /app/apps/worker/dist ./apps/worker/di
 COPY --from=builder --chown=worker:nodejs /app/apps/worker/package.json ./apps/worker/
 
 USER worker
+ENTRYPOINT []
 CMD ["node", "apps/worker/dist/index.js"]

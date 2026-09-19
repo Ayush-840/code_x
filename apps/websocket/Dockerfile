@@ -25,4 +25,5 @@ COPY --from=builder --chown=wsuser:nodejs /app/apps/websocket/package.json ./app
 
 USER wsuser
 EXPOSE 4001
+ENTRYPOINT []
 CMD ["node", "apps/websocket/dist/index.js"]
