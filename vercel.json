@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pnpm --filter @vibe-coder/web run build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "rootDirectory": "apps/web"
+}
