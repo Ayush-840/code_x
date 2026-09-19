@@ -5,20 +5,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# Use Poetry to install dependencies directly
+RUN pip install --no-cache-dir poetry
+
 COPY packages/analysis/pyproject.toml /tmp/analysis/
 COPY packages/retrieval/pyproject.toml /tmp/retrieval/
 COPY packages/generation/pyproject.toml /tmp/generation/
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
 
-RUN printf 'import tomllib\nfor svc in ["analysis","retrieval","generation","mock-interview"]:\n  with open(f"/tmp/{svc}/pyproject.toml","rb") as f:\n    data = tomllib.load(f)\n  deps = data.get("tool",{}).get("poetry",{}).get("dependencies",{})\n  reqs = [f"{k}{v}" for k,v in deps.items() if k!="python"]\n  with open(f"/tmp/{svc}/requirements.txt","w") as out:\n    out.write("\\n".join(reqs) + "\\n")\n  print(f"{svc}: {reqs}")\n' > /tmp/extract_reqs.py && python3 /tmp/extract_reqs.py
-
-RUN echo "=== analysis ===" && cat /tmp/analysis/requirements.txt && echo "=== retrieval ===" && cat /tmp/retrieval/requirements.txt && echo "=== generation ===" && cat /tmp/generation/requirements.txt && echo "=== mock-interview ===" && cat /tmp/mock-interview/requirements.txt
-
-RUN pip install --no-cache-dir \
-    -r /tmp/analysis/requirements.txt \
-    -r /tmp/retrieval/requirements.txt \
-    -r /tmp/generation/requirements.txt \
-    -r /tmp/mock-interview/requirements.txt
+# Install each service with Poetry
+RUN for svc in analysis retrieval generation mock-interview; do \
+      cd /tmp/$svc && poetry config virtualenvs.create false && poetry install --no-interaction --no-root; \
+    done
 
 FROM base AS runner
 COPY packages/ ./packages/
