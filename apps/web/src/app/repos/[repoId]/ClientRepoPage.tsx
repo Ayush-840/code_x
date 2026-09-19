@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthRedirect } from "@/components/auth";
-import { useAuthedFetch, clearTokens } from "@/lib/api";
+import { useAuthedFetch } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { ArchitectureTab } from "@/components/tabs/ArchitectureTab";
 import { ModulesTab } from "@/components/tabs/ModulesTab";

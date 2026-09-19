@@ -40,6 +40,7 @@ export function ChatTab({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [copiedCitation, setCopiedCitation] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,7 +71,10 @@ export function ChatTab({
       });
     };
 
-    const onEnd = () => setStreaming(false);
+    const onEnd = (payload: { isDemo?: boolean }) => {
+      setStreaming(false);
+      if (payload.isDemo) setIsDemoMode(true);
+    };
 
     socket.on("chat:stream:chunk", onChunk);
     socket.on("chat:stream:end", onEnd);
@@ -141,6 +145,11 @@ export function ChatTab({
           <span className="badge badge-teal" style={{ fontSize: 11 }}>
             RAG Grounded
           </span>
+          {isDemoMode && (
+            <span className="badge badge-yellow" style={{ fontSize: 11, background: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
+              DEMO
+            </span>
+          )}
         </div>
         {messages.length > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={clearChat} style={{ fontSize: 12, padding: "4px 10px" }}>

@@ -1,0 +1,37 @@
+FROM python:3.13-slim AS base
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies for all services
+COPY packages/analysis/requirements.txt /tmp/analysis-requirements.txt
+COPY packages/retrieval/requirements.txt /tmp/retrieval-requirements.txt
+COPY packages/generation/requirements.txt /tmp/generation-requirements.txt
+COPY packages/mock-interview/requirements.txt /tmp/mock-interview-requirements.txt
+
+RUN pip install --no-cache-dir \
+    -r /tmp/analysis-requirements.txt \
+    -r /tmp/retrieval-requirements.txt \
+    -r /tmp/generation-requirements.txt \
+    -r /tmp/mock-interview-requirements.txt
+
+FROM base AS runner
+COPY packages/ ./packages/
+
+ARG SERVICE=analysis
+ENV SERVICE=${SERVICE}
+
+EXPOSE ${SERVICE_PORT:-8100}
+
+CMD if [ "$SERVICE" = "analysis" ]; then \
+      uvicorn packages.analysis.src.analysis.main:app --host 0.0.0.0 --port 8100; \
+    elif [ "$SERVICE" = "retrieval" ]; then \
+      uvicorn packages.retrieval.src.retrieval.main:app --host 0.0.0.0 --port 8200; \
+    elif [ "$SERVICE" = "generation" ]; then \
+      uvicorn packages.generation.src.generation.main:app --host 0.0.0.0 --port 8300; \
+    elif [ "$SERVICE" = "mock-interview" ]; then \
+      uvicorn packages.mock_interview.src.mock_interview.main:app --host 0.0.0.0 --port 8400; \
+    fi

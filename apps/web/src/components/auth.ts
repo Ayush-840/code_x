@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getToken } from "@/lib/api";
+import { isAuthenticated } from "@/lib/api";
 
 export function useAuthRedirect(): "loading" | "authed" | "public" {
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "authed" | "public">("loading");
 
   useEffect(() => {
-    const token = getToken();
-    if (token) {
+    if (isAuthenticated()) {
       setStatus("authed");
       return;
     }

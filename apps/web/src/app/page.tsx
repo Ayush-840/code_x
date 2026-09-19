@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getToken } from "@/lib/api";
+import { isAuthenticated } from "@/lib/api";
 
 const FEATURES = [
   {
@@ -72,7 +72,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     setMounted(true);
-    if (getToken()) router.replace("/dashboard");
+    if (isAuthenticated()) router.replace("/dashboard");
   }, [router]);
 
   if (!mounted) {

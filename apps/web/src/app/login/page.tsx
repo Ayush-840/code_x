@@ -2,23 +2,30 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { setToken, getToken } from "@/lib/api";
+import { isAuthenticated } from "@/lib/api";
 
 function LoginContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [mode, setMode] = useState<"checking" | "ready">("checking");
+  const [mode, setMode] = useState<"checking" | "ready" | "error">("checking");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // Handle OAuth callback: token arrives in query string
-    const token = params.get("token");
-    if (token) {
-      setToken(token);
+    // OAuth callback sets cookies, redirects here with ?authenticated=1
+    const authenticated = params.get("authenticated");
+    if (authenticated === "1") {
       router.replace("/dashboard");
       return;
     }
+    // Check for auth error
+    const authError = params.get("error");
+    if (authError) {
+      setErrorMsg(decodeURIComponent(authError));
+      setMode("error");
+      return;
+    }
     // Already logged in
-    if (getToken()) {
+    if (isAuthenticated()) {
       router.replace("/dashboard");
       return;
     }
@@ -36,6 +43,19 @@ function LoginContent() {
     );
   }
 
+  if (mode === "error") {
+    return (
+      <div style={S.page}>
+        <div className="gradient-bg" />
+        <div className="glass fade-up" style={S.card}>
+          <h1 style={S.h1}>Authentication Error</h1>
+          <p style={{ ...S.p, marginBottom: 16 }}>{errorMsg ?? "Failed to authenticate."}</p>
+          <a href="/login" style={{ ...S.githubBtn, textDecoration: "none" }}>Try Again</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={S.page}>
       <div className="gradient-bg" />
@@ -48,15 +68,13 @@ function LoginContent() {
 
       {/* Card */}
       <div className="glass fade-up" style={S.card}>
-        {/* Header */}
         <div style={S.cardHeader}>
           <h1 style={S.h1}>Welcome back</h1>
-          <p style={S.p}>Sign in to access your personalized interview prep dashboard.</p>
+          <p style={S.p}>Sign in with GitHub to access your interview prep dashboard.</p>
         </div>
 
         <hr style={S.divider} />
 
-        {/* GitHub OAuth button */}
         <a href={`${API}/v1/auth/github`} style={{ display: "block" }}>
           <button style={S.githubBtn} className="btn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -70,7 +88,6 @@ function LoginContent() {
           By signing in you agree to our Terms of Service. We request read-only access to your repositories.
         </p>
 
-        {/* How it works mini-steps */}
         <div style={S.steps}>
           {[
             { n: "1", t: "Connect a repo", d: "Paste any GitHub URL and your PAT" },

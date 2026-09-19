@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthRedirect } from "@/components/auth";
-import { useAuthedFetch, clearTokens } from "@/lib/api";
+import { useAuthedFetch, logout as apiLogout } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { RepoConnectForm } from "@/components/RepoConnectForm";
 
@@ -99,7 +99,7 @@ export default function DashboardPage() {
     socket.emit("repo:join", { repoId, jobId: res.jobId });
   }, [api, socket]);
 
-  const logout = () => { clearTokens(); router.replace("/login"); };
+  const logout = () => { apiLogout(); };
 
   if (status !== "authed") {
     return (

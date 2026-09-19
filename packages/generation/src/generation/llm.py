@@ -14,18 +14,20 @@ _SYSTEM_PROMPT = (
 )
 
 
-def complete(query: str, hits: list[dict]) -> tuple[str, list[dict]]:
+def complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
+    """Returns (answer, citations, isDemo)."""
     if not os.getenv("OPENAI_API_KEY"):
         return _demo_complete(query, hits)
     return _openai_complete(query, hits)
 
 
-def _demo_complete(query: str, hits: list[dict]) -> tuple[str, list[dict]]:
+def _demo_complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
     if not hits:
         return (
             "[demo] No code chunks are indexed for this repo yet. Run an analysis "
             "first, then ask again.",
             [],
+            True,
         )
     relevant = hits[0]
     top = "\n".join(
@@ -45,10 +47,10 @@ def _demo_complete(query: str, hits: list[dict]) -> tuple[str, list[dict]]:
         f"{marker}\n\n"
         f"Referenced context:\n{top}"
     )
-    return answer, [c for c in _citations_from(answer)]
+    return answer, [c for c in _citations_from(answer)], True
 
 
-def _openai_complete(query: str, hits: list[dict]) -> tuple[str, list[dict]]:
+def _openai_complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
     from openai import OpenAI
 
     client = OpenAI()
@@ -66,7 +68,7 @@ def _openai_complete(query: str, hits: list[dict]) -> tuple[str, list[dict]]:
         ],
     )
     text = resp.choices[0].message.content or ""
-    return text, [c for c in _citations_from(text)]
+    return text, [c for c in _citations_from(text)], False
 
 
 def _citations_from(answer: str) -> list[dict]:

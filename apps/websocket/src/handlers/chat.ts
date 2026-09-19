@@ -26,6 +26,7 @@ export async function handleChatSend(
   io.to(socket.id).emit("chat:stream:start", { messageId, sessionId });
 
   let answer = "";
+  let isDemo = false;
   try {
     const resp = await fetch(`${GENERATION_URL}/chat`, {
       method: "POST",
@@ -33,8 +34,13 @@ export async function handleChatSend(
       body: JSON.stringify({ repoId: sessionId.split(":")[0] ?? "", query: content }),
     });
     if (resp.ok) {
-      const body = (await resp.json()) as { message: string; citations: typeof EMPTY_CITATIONS };
+      const body = (await resp.json()) as {
+        message: string;
+        citations: typeof EMPTY_CITATIONS;
+        isDemo: boolean;
+      };
       answer = body.message;
+      isDemo = body.isDemo;
     } else {
       answer = "The generation service is unavailable right now. Please try again.";
     }
@@ -54,7 +60,8 @@ export async function handleChatSend(
   io.to(socket.id).emit("chat:stream:end", {
     messageId,
     totalTokens: Math.ceil(answer.length / 4),
-    modelUsed: "demo",
+    modelUsed: isDemo ? "demo" : "gpt-4o",
+    isDemo,
   });
 }
 

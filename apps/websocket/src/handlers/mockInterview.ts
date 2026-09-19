@@ -129,6 +129,7 @@ export async function handleInterviewAnswer(
       confidence: scores.confidence,
     },
     feedback,
+    isDemo: true,
   });
 }
 
@@ -196,5 +197,6 @@ export async function handleInterviewComplete(
       gaps: session.answers.length < 3 ? ["Answer depth", "File-specific references"] : [],
       studySuggestions: ["Re-read the architecture artifact before your phone screen"],
     },
+    isDemo: true,
   });
 }

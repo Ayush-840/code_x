@@ -293,6 +293,9 @@ export function MockInterviewTab({
               Practice speaking on your repository under simulated pressure. Receive immediate rubric scores,
               depth evaluations, and actionable feedback tailored to your code.
             </p>
+            <span className="badge badge-yellow" style={{ fontSize: 11, background: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)", marginTop: 12, display: "inline-block" }}>
+              DEMO MODE
+            </span>
           </div>
 
           {/* Persona selector */}

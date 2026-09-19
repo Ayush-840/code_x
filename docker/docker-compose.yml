@@ -1,4 +1,5 @@
 services:
+  # ── Infrastructure ──────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: vibecoder-postgres
@@ -39,6 +40,132 @@ services:
       - "9600:9600"
     volumes:
       - vibecoder-osdata:/usr/share/opensearch/data
+
+  # ── Application Services ───────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: vibecoder-api
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://vibecoder:dev_password_123@postgres:5432/vibecoder_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-32-char-string}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      FRONTEND_URL: http://localhost:3000
+      ANALYSIS_SERVICE_URL: http://analysis:8100
+      RETRIEVAL_SERVICE_URL: http://retrieval:8200
+      GENERATION_SERVICE_URL: http://generation:8300
+      MOCK_INTERVIEW_SERVICE_URL: http://mock-interview:8400
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  websocket:
+    build:
+      context: ..
+      dockerfile: apps/websocket/Dockerfile
+    container_name: vibecoder-websocket
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-32-char-string}
+      FRONTEND_URL: http://localhost:3000
+      GENERATION_SERVICE_URL: http://generation:8300
+      MOCK_INTERVIEW_SERVICE_URL: http://mock-interview:8400
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    container_name: vibecoder-worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://vibecoder:dev_password_123@postgres:5432/vibecoder_dev
+      REDIS_URL: redis://redis:6379
+      ANALYSIS_SERVICE_URL: http://analysis:8100
+      RETRIEVAL_SERVICE_URL: http://retrieval:8200
+      GENERATION_SERVICE_URL: http://generation:8300
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  analysis:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE: analysis
+    container_name: vibecoder-analysis
+    ports:
+      - "8100:8100"
+    environment:
+      RETRIEVAL_SERVICE_URL: http://retrieval:8200
+
+  retrieval:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE: retrieval
+    container_name: vibecoder-retrieval
+    ports:
+      - "8200:8200"
+    environment:
+      OPENSEARCH_URL: http://opensearch:9200
+
+  generation:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE: generation
+    container_name: vibecoder-generation
+    ports:
+      - "8300:8300"
+    environment:
+      RETRIEVAL_SERVICE_URL: http://retrieval:8200
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+  mock-interview:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE: mock-interview
+    container_name: vibecoder-mock-interview
+    ports:
+      - "8400:8400"
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: vibecoder-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      API_URL: http://api:4000
+      NEXT_PUBLIC_WS_URL: http://localhost:4001
+    depends_on:
+      api:
+        condition: service_started
 
 volumes:
   vibecoder-pgdata:

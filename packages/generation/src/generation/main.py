@@ -56,8 +56,13 @@ def generate_question_bank(req: QuestionsReq) -> dict:
 def chat(req: ChatReq) -> dict:
     """RAG call: retrieve relevant chunks, then answer with inline citations."""
     hits = _retrieve(req.repoId, req.query)
-    answer, citations = complete(req.query, hits)
-    return {"message": answer, "citations": citations, "modelUsed": "gpt-4o-demo"}
+    answer, citations, is_demo = complete(req.query, hits)
+    return {
+        "message": answer,
+        "citations": citations,
+        "isDemo": is_demo,
+        "modelUsed": "gpt-4o-demo" if is_demo else "gpt-4o",
+    }
 
 
 def _retrieve(repo_id: str, query: str, top_k: int = 8) -> list[dict]:

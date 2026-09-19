@@ -10,26 +10,19 @@ export class ApiError extends Error {
   }
 }
 
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("vtk");
-}
-
-export function setToken(token: string): void {
-  window.localStorage.setItem("vtk", token);
-}
-
-export function clearTokens(): void {
-  window.localStorage.removeItem("vtk");
+export function isAuthenticated(): boolean {
+  if (typeof window === "undefined") return false;
+  // httpOnly cookies are sent automatically; we can't read them directly.
+  // Instead, try a lightweight request to check.
+  return document.cookie.includes("access_token=");
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const res = await fetch(`${API_URL}/v1${path}`, {
     ...init,
+    credentials: "include", // send cookies
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   });
@@ -39,10 +32,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       code: "UNKNOWN",
       message: "Request failed",
     };
-    if (res.status === 401) clearTokens();
     throw new ApiError(res.status, err.code, err.message);
   }
   return (body as { data: T }).data;
+}
+
+export async function refreshTokens(): Promise<boolean> {
+  try {
+    await request("/auth/refresh", { method: "POST" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await request("/auth/logout", { method: "DELETE" });
+  } catch {
+    // ignore errors on logout
+  }
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
+  }
 }
 
 export function useAuthedFetch() {

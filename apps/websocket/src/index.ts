@@ -4,7 +4,7 @@ import { Redis } from "ioredis";
 import { createAdapter } from "@socket.io/redis-adapter";
 import "dotenv/config";
 
-import { verifyToken } from "./auth";
+import { verifyToken, extractTokenFromCookie } from "./auth";
 import { handleChatSend } from "./handlers/chat";
 import {
   handleInterviewStart,
@@ -52,7 +52,10 @@ pubClient.on("message", (_channel, message) => {
 
 io.use((socket: Socket, next) => {
   try {
+    // Try cookie first, then auth header, then auth object
+    const cookieToken = extractTokenFromCookie(socket.handshake.headers?.cookie);
     const token =
+      cookieToken ??
       (socket.handshake.auth?.token as string | undefined) ??
       (socket.handshake.headers.authorization?.replace(/^Bearer /, "") as string | undefined);
     const payload = verifyToken(token);

@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { simpleGit } from "simple-git";
@@ -32,8 +32,14 @@ async function progress(jobId: string, stage: string, pct: number, message: stri
   );
 }
 
+function maskToken(token: string): string {
+  if (token.length <= 8) return "****";
+  return token.slice(0, 4) + "****" + token.slice(-4);
+}
+
 export async function analyzeRepo(data: AnalyzeRepoData) {
   const { repoId, jobId, accessToken, fullName, defaultBranch } = data;
+  let dir: string | null = null;
 
   try {
     await prisma.analysisJob.update({
@@ -47,7 +53,8 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
 
     // 1. CLONE
     await progress(jobId, "CLONING", 5, "Cloning repository");
-    const dir = await mkdtemp(join(tmpdir(), "vibecoder-"));
+    dir = await mkdtemp(join(tmpdir(), "vibecoder-"));
+    console.log(`[worker] Cloning ${fullName} to ${dir} (token: ${maskToken(accessToken)})`);
     await simpleGit().clone(
       `https://x-access-token:${accessToken}@github.com/${fullName}.git`,
       dir,
@@ -134,5 +141,15 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       data: { status: "FAILED" },
     });
     throw error;
+  } finally {
+    // Always clean up cloned repo directory
+    if (dir) {
+      try {
+        await rm(dir, { recursive: true, force: true });
+        console.log(`[worker] Cleaned up ${dir}`);
+      } catch (cleanupErr) {
+        console.warn(`[worker] Failed to clean up ${dir}:`, cleanupErr);
+      }
+    }
   }
 }

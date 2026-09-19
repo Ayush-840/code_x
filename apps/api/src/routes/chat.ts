@@ -89,10 +89,16 @@ router.post("/sessions/:sessionId/messages", async (req: AuthedRequest, res, nex
     });
     let answer: string;
     let citations: unknown[] = [];
+    let isDemo = false;
     if (genRes.ok) {
-      const body = (await genRes.json()) as { message: string; citations: unknown[] };
+      const body = (await genRes.json()) as {
+        message: string;
+        citations: unknown[];
+        isDemo: boolean;
+      };
       answer = body.message;
       citations = body.citations;
+      isDemo = body.isDemo;
     } else {
       answer = "The generation service is unavailable right now. Please try again.";
     }
@@ -106,7 +112,7 @@ router.post("/sessions/:sessionId/messages", async (req: AuthedRequest, res, nex
       },
     });
 
-    ok(res, { user: userMessage, assistant: assistantMessage }, 201);
+    ok(res, { user: userMessage, assistant: assistantMessage, isDemo }, 201);
   } catch (err) {
     next(err);
   }
