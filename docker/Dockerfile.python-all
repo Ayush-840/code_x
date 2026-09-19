@@ -1,19 +1,29 @@
 FROM python:3.13-slim AS base
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install all Python dependencies directly
 COPY packages/analysis/pyproject.toml /tmp/analysis/
 COPY packages/retrieval/pyproject.toml /tmp/retrieval/
 COPY packages/generation/pyproject.toml /tmp/generation/
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
 
-# Extract dependencies from pyproject.toml and install
-RUN python3 -c "import tomllib, sys; [open(f'/tmp/{s}/requirements.txt','w').write('\n'.join(f'{k}{v}' for k,v in tomllib.load(open(f'/tmp/{s}/pyproject.toml','rb')).get('tool',{}).get('poetry',{}).get('dependencies',{}).items() if k!='python')) for s in ['analysis','retrieval','generation','mock-interview']]"
+# Extract dependencies with debug output
+RUN python3 -c "
+import tomllib
+for svc in ['analysis','retrieval','generation','mock-interview']:
+    with open(f'/tmp/{svc}/pyproject.toml','rb') as f:
+        data = tomllib.load(f)
+    deps = data.get('tool',{}).get('poetry',{}).get('dependencies',{})
+    reqs = [f'{k}{v}' for k,v in deps.items() if k!='python']
+    with open(f'/tmp/{svc}/requirements.txt','w') as out:
+        out.write('\n'.join(reqs) + '\n')
+    print(f'{svc}: {reqs}')
+"
+
+RUN cat /tmp/analysis/requirements.txt && cat /tmp/retrieval/requirements.txt
 
 RUN pip install --no-cache-dir \
     -r /tmp/analysis/requirements.txt \
