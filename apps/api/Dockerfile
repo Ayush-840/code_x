@@ -24,10 +24,11 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 apiuser
 
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
+COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api/
 
 USER apiuser
 EXPOSE 4000
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["sh", "-c", "pnpm --filter @vibe-coder/database exec prisma migrate deploy && node apps/api/dist/index.js"]

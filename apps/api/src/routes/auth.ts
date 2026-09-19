@@ -21,8 +21,8 @@ function setAuthCookies(
   accessToken: string,
   refreshToken: string
 ): void {
-  const isProd = process.env.NODE_ENV === "production";
-  const baseOpts = { httpOnly: true, secure: isProd, sameSite: "lax" as const, path: "/" };
+  const { isProd, cookieSameSite } = config;
+  const baseOpts = { httpOnly: true, secure: isProd, sameSite: cookieSameSite, path: "/" };
 
   res.cookie("access_token", accessToken, {
     ...baseOpts,
@@ -43,7 +43,8 @@ function clearAuthCookies(res: Response): void {
 // GET /v1/auth/github — initiate OAuth flow
 router.get("/github", (_req, res) => {
   const state = randomBytes(16).toString("hex");
-  res.cookie("oauth_state", state, { httpOnly: true, sameSite: "lax" });
+  const { isProd, cookieSameSite } = config;
+  res.cookie("oauth_state", state, { httpOnly: true, secure: isProd, sameSite: cookieSameSite });
   const params = new URLSearchParams({
     client_id: config.githubClientId,
     redirect_uri: `${config.apiUrl}/v1/auth/github/callback`,

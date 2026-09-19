@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 
 import { requireAuth } from "./middleware/auth";
 import { errorHandler, notFound } from "./middleware/errors";
+import { config } from "./config";
 
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
@@ -20,7 +21,12 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+      origin(origin, callback) {
+        if (!origin) return callback(null, true); // same-origin / server-to-server
+        if (config.allowedOrigins.includes(origin)) return callback(null, true);
+        if (config.previewPattern && config.previewPattern.test(origin)) return callback(null, true);
+        callback(new Error("Not allowed by CORS"));
+      },
       credentials: true,
     })
   );

@@ -26,6 +26,9 @@ function optionalEnv(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+const isProd = process.env.NODE_ENV === "production";
+const cookieCrossSite = process.env.COOKIE_CROSS_SITE === "true";
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: requireEnv("DATABASE_URL"),
@@ -43,4 +46,11 @@ export const config = {
   mockInterviewServiceUrl: optionalEnv("MOCK_INTERVIEW_SERVICE_URL", "http://localhost:8400"),
   stripeSecretKey: optionalEnv("STRIPE_SECRET_KEY", ""),
   stripeWebhookSecret: optionalEnv("STRIPE_WEBHOOK_SECRET", ""),
+  isProd,
+  cookieCrossSite,
+  cookieSameSite: cookieCrossSite ? ("none" as const) : ("lax" as const),
+  allowedOrigins: optionalEnv("FRONTEND_URL", "http://localhost:3000").split(","),
+  previewPattern: process.env.FRONTEND_PREVIEW_PATTERN
+    ? new RegExp(process.env.FRONTEND_PREVIEW_PATTERN)
+    : null,
 };

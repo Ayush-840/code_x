@@ -21,6 +21,10 @@ RUN for svc in analysis retrieval generation mock-interview; do \
 FROM base AS runner
 COPY packages/ ./packages/
 
+# Ensure persistent storage directory exists
+ENV RETRIEVAL_STORAGE_DIR=/data/retrieval
+RUN mkdir -p /data/retrieval
+
 ENV PYTHONPATH=/app/packages/shared_python/src:/app/packages/analysis/src:/app/packages/retrieval/src:/app/packages/generation/src:/app/packages/mock-interview/src
 
 COPY docker/start-python-services.sh /start-python-services.sh

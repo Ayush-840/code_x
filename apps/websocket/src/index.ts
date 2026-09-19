@@ -15,6 +15,12 @@ import {
 
 const PORT = Number(process.env.PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
+const PREVIEW_PATTERN = process.env.FRONTEND_PREVIEW_PATTERN
+  ? new RegExp(process.env.FRONTEND_PREVIEW_PATTERN)
+  : null;
+
+const allowedOrigins = FRONTEND_URL.split(",");
 
 const pubClient = new Redis(REDIS_URL);
 const subClient = pubClient.duplicate();
@@ -22,7 +28,12 @@ const subClient = pubClient.duplicate();
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (PREVIEW_PATTERN && PREVIEW_PATTERN.test(origin)) return callback(null, true);
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   },
   adapter: createAdapter(pubClient, subClient),
