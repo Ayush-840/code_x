@@ -31,8 +31,8 @@ COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 
-# Install production dependencies
-RUN corepack enable && pnpm install --frozen-lockfile --prod
+# Install production dependencies with hoisting to create symlinks
+RUN corepack enable && pnpm install --frozen-lockfile --prod --shamefully-hoist
 
 # Copy built files and other assets
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
