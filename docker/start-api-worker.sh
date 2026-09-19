@@ -2,7 +2,7 @@
 set -e
 
 echo "[start] Running migrations..."
-pnpm --filter @vibe-coder/database exec prisma migrate deploy
+npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 echo "[start] Starting API + Worker combined..."
 
