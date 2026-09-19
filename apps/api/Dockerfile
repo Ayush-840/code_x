@@ -33,4 +33,4 @@ COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api
 USER apiuser
 EXPOSE 4000
 ENTRYPOINT []
-CMD ["sh", "-c", "pnpm --filter @vibe-coder/database exec prisma migrate deploy && node apps/api/dist/apps/api/src/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema packages/database/prisma/schema.prisma && node apps/api/dist/apps/api/src/index.js"]
