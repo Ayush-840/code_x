@@ -1,23 +1,30 @@
 FROM python:3.13-slim AS base
 WORKDIR /app
 
-# Install system dependencies + Poetry
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir poetry
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml files
-COPY packages/analysis/pyproject.toml /tmp/analysis/pyproject.toml
-COPY packages/retrieval/pyproject.toml /tmp/retrieval/pyproject.toml
-COPY packages/generation/pyproject.toml /tmp/generation/pyproject.toml
-COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/pyproject.toml
+# Install all Python dependencies directly
+COPY packages/analysis/pyproject.toml /tmp/analysis/
+COPY packages/retrieval/pyproject.toml /tmp/retrieval/
+COPY packages/generation/pyproject.toml /tmp/generation/
+COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
 
-# Export deps and install
-RUN for svc in analysis retrieval generation mock-interview; do \
-      cd /tmp/$svc && poetry export -f requirements.txt --without-hashes -o requirements.txt 2>/dev/null || \
-      (python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); [print(f'{k}{v}') for k,v in d.get('tool',{}).get('poetry',{}).get('dependencies',{}).items() if k!='python']" > requirements.txt); \
-    done
+# Extract dependencies from pyproject.toml and install
+RUN python3 -c "
+import tomllib, sys
+for svc in ['analysis', 'retrieval', 'generation', 'mock-interview']:
+    with open(f'/tmp/{svc}/pyproject.toml', 'rb') as f:
+        data = tomllib.load(f)
+    deps = data.get('tool', {}).get('poetry', {}).get('dependencies', {})
+    with open(f'/tmp/{svc}/requirements.txt', 'w') as out:
+        for k, v in deps.items():
+            if k != 'python':
+                out.write(f'{k}{v}\n')
+"
+
 RUN pip install --no-cache-dir \
     -r /tmp/analysis/requirements.txt \
     -r /tmp/retrieval/requirements.txt \
@@ -27,10 +34,8 @@ RUN pip install --no-cache-dir \
 FROM base AS runner
 COPY packages/ ./packages/
 
-# Install shared_python
 ENV PYTHONPATH=/app/packages/shared_python/src:/app/packages/analysis/src:/app/packages/retrieval/src:/app/packages/generation/src:/app/packages/mock-interview/src
 
-# Start all 4 services
 COPY docker/start-python-services.sh /start-python-services.sh
 RUN chmod +x /start-python-services.sh
 
