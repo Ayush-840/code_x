@@ -2,7 +2,7 @@
 set -e
 
 echo "[start] Running migrations..."
-npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
+./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 echo "[start] Starting API + Worker combined..."
 
