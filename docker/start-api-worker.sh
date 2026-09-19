@@ -1,9 +1,6 @@
 #!/bin/sh
 set -e
 
-echo "[start] Fixing prisma engine permissions..."
-chmod -R u+w /app/node_modules/.pnpm/@prisma+engines@* 2>/dev/null || true
-
 echo "[start] Running migrations..."
 ./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
