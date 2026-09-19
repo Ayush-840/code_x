@@ -1,52 +1,50 @@
-node:internal/modules/cjs/loader:1210
-  throw err;
-  ^
+npm warn exec The following package was not found and will be installed: prisma@7.10.0
+npm warn exec The following package was not found and will be installed: prisma@7.10.0
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@prisma/streams-local@0.1.11',
+npm warn EBADENGINE   required: { bun: '>=1.2.0', node: '>=22.0.0' },
+npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@prisma/streams-local@0.1.11',
+npm warn EBADENGINE   required: { bun: '>=1.2.0', node: '>=22.0.0' },
+npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+npm warn EBADENGINE }
+Prisma schema loaded from packages/database/prisma/schema.prisma.
+Prisma schema loaded from packages/database/prisma/schema.prisma.
+Error: Prisma schema validation - (get-config wasm)
+Error code: P1012
+error: The datasource property `url` is no longer supported in schema files. Move connection URLs for Migrate to `prisma.config.ts` and pass either `adapter` for a direct database connection or `accelerateUrl` for Accelerate to the `PrismaClient` constructor. See https://pris.ly/d/config-datasource and https://pris.ly/d/prisma7-client-config
+  -->  packages/database/prisma/schema.prisma:8
+   | 
+ 7 |   provider = "postgresql"
+ 8 |   url      = env("DATABASE_URL")
+   | 
 
-Error: Cannot find module 'express'
-Require stack:
-- /app/apps/api/dist/apps/api/src/app.js
-- /app/apps/api/dist/apps/api/src/index.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
-    at Module._load (node:internal/modules/cjs/loader:1038:27)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/apps/api/dist/apps/api/src/app.js:7:35)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19) {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: [
-    '/app/apps/api/dist/apps/api/src/app.js',
-    '/app/apps/api/dist/apps/api/src/index.js'
-  ]
-}
+Validation Error Count: 1
+[Context: getConfig]
 
-Node.js v20.20.2
-node:internal/modules/cjs/loader:1210
-  throw err;
-  ^
+Prisma CLI Version : 7.10.0
+Error: Prisma schema validation - (get-config wasm)
+Error code: P1012
+error: The datasource property `url` is no longer supported in schema files. Move connection URLs for Migrate to `prisma.config.ts` and pass either `adapter` for a direct database connection or `accelerateUrl` for Accelerate to the `PrismaClient` constructor. See https://pris.ly/d/config-datasource and https://pris.ly/d/prisma7-client-config
+  -->  packages/database/prisma/schema.prisma:8
+   | 
+ 7 |   provider = "postgresql"
+ 8 |   url      = env("DATABASE_URL")
+   | 
 
-Error: Cannot find module 'express'
-Require stack:
-- /app/apps/api/dist/apps/api/src/app.js
-- /app/apps/api/dist/apps/api/src/index.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
-    at Module._load (node:internal/modules/cjs/loader:1038:27)
-    at Module.require (node:internal/modules/cjs/loader:1289:19)
-    at require (node:internal/modules/helpers:182:18)
-    at Object.<anonymous> (/app/apps/api/dist/apps/api/src/app.js:7:35)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Module.require (node:internal/modules/cjs/loader:1289:19) {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: [
-    '/app/apps/api/dist/apps/api/src/app.js',
-    '/app/apps/api/dist/apps/api/src/index.js'
-  ]
-}
+Validation Error Count: 1
+[Context: getConfig]
 
-Node.js v20.20.2
+Prisma CLI Version : 7.10.0
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 12.0.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+npm notice To update run: npm install -g npm@12.0.2
+npm notice
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 12.0.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+npm notice To update run: npm install -g npm@12.0.2
+npm notice
