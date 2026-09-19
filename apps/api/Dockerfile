@@ -23,12 +23,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 apiuser
 
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+
+# Install production dependencies
+RUN corepack enable && pnpm install --frozen-lockfile --prod
 
 USER apiuser
 EXPOSE 4000
