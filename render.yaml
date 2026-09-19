@@ -1,0 +1,87 @@
+{
+  "$schema": "https://render.com/schema/render.yaml",
+  "services": [
+    {
+      "type": "web",
+      "name": "vibecoder-api",
+      "runtime": "image",
+      "image": { "url": "ghcr.io/Ayush-840/code_x/api:main" },
+      "envVars": [
+        { "key": "NODE_ENV", "value": "production" },
+        { "key": "PORT", "value": "4000" },
+        { "key": "DATABASE_URL", "fromDatabase": { "name": "vibecoder-db", "property": " connectionString" } },
+        { "key": "REDIS_URL", "fromService": { "name": "vibecoder-redis", "property": "connectString" } },
+        { "key": "JWT_SECRET", "generateValue": true },
+        { "key": "GITHUB_CLIENT_ID", "sync": false },
+        { "key": "GITHUB_CLIENT_SECRET", "sync": false },
+        { "key": "FRONTEND_URL", "value": "https://*.vercel.app" },
+        { "key": "API_URL", "value": "https://vibecoder-api.onrender.com" },
+        { "key": "ANALYSIS_SERVICE_URL", "value": "http://vibecoder-python:8100" },
+        { "key": "RETRIEVAL_SERVICE_URL", "value": "http://vibecoder-python:8200" },
+        { "key": "GENERATION_SERVICE_URL", "value": "http://vibecoder-python:8300" },
+        { "key": "MOCK_INTERVIEW_SERVICE_URL", "value": "http://vibecoder-python:8400" }
+      ],
+      "build": { "dockerfilePath": "apps/api/Dockerfile" },
+      "healthCheckPath": "/v1/auth/me",
+      "autoDeploy": true
+    },
+    {
+      "type": "web",
+      "name": "vibecoder-websocket",
+      "runtime": "image",
+      "image": { "url": "ghcr.io/Ayush-840/code_x/websocket:main" },
+      "envVars": [
+        { "key": "NODE_ENV", "value": "production" },
+        { "key": "PORT", "value": "4001" },
+        { "key": "REDIS_URL", "fromService": { "name": "vibecoder-redis", "property": "connectString" } },
+        { "key": "JWT_SECRET", "fromService": { "name": "vibecoder-api", "property": "envVars.JWT_SECRET" } },
+        { "key": "FRONTEND_URL", "value": "https://*.vercel.app" },
+        { "key": "MOCK_INTERVIEW_SERVICE_URL", "value": "http://vibecoder-python:8400" }
+      ],
+      "build": { "dockerfilePath": "apps/websocket/Dockerfile" },
+      "autoDeploy": true
+    },
+    {
+      "type": "web",
+      "name": "vibecoder-python",
+      "runtime": "image",
+      "image": { "url": "ghcr.io/Ayush-840/code_x/python:main" },
+      "envVars": [
+        { "key": "NVIDIA_API_KEYS", "sync": false },
+        { "key": "GEMINI_API_KEYS", "sync": false },
+        { "key": "ANTHROPIC_API_KEY", "sync": false },
+        { "key": "RETRIEVAL_STORAGE_DIR", "value": "/tmp/vibecoder-retrieval" }
+      ],
+      "build": { "dockerfilePath": "docker/Dockerfile.python" },
+      "autoDeploy": true
+    },
+    {
+      "type": "web",
+      "name": "vibecoder-worker",
+      "runtime": "image",
+      "image": { "url": "ghcr.io/Ayush-840/code_x/worker:main" },
+      "envVars": [
+        { "key": "NODE_ENV", "value": "production" },
+        { "key": "DATABASE_URL", "fromDatabase": { "name": "vibecoder-db", "property": "connectionString" } },
+        { "key": "REDIS_URL", "fromService": { "name": "vibecoder-redis", "property": "connectString" } },
+        { "key": "ANALYSIS_SERVICE_URL", "value": "http://vibecoder-python:8100" },
+        { "key": "RETRIEVAL_SERVICE_URL", "value": "http://vibecoder-python:8200" },
+        { "key": "GENERATION_SERVICE_URL", "value": "http://vibecoder-python:8300" }
+      ],
+      "build": { "dockerfilePath": "apps/worker/Dockerfile" },
+      "autoDeploy": true
+    },
+    {
+      "type": "redis",
+      "name": "vibecoder-redis",
+      "ipAllowList": [],
+      "plan": "starter"
+    },
+    {
+      "type": "postgresql",
+      "name": "vibecoder-db",
+      "databaseName": "vibecoder",
+      "plan": "starter"
+    }
+  ]
+}
