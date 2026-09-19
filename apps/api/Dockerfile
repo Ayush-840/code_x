@@ -52,4 +52,4 @@ COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api
 USER apiuser
 EXPOSE 4000
 ENTRYPOINT []
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma && node apps/api/dist/apps/api/src/index.js"]
+CMD ["sh", "-c", "MAX_RETRIES=30; RETRY=0; until ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma; do RETRY=$((RETRY+1)); if [ $RETRY -ge 30 ]; then echo 'Migration failed after 30 attempts'; exit 1; fi; echo 'Database not ready, waiting 2s... (attempt $RETRY/30)'; sleep 2; done; echo 'Migrations completed'; node apps/api/dist/apps/api/src/index.js"]
