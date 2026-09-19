@@ -20,6 +20,8 @@ COPY . .
 RUN corepack enable && pnpm --filter @vibe-coder/database exec prisma generate
 RUN pnpm --filter @vibe-coder/api build
 RUN pnpm --filter @vibe-coder/worker build
+# Pre-download Prisma engines to avoid permission issues at runtime
+RUN ./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma 2>/dev/null || true
 
 FROM node:20-alpine AS runner
 WORKDIR /app
