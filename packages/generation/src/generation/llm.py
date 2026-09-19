@@ -1,9 +1,22 @@
 """LLM completion with an offline demo mode. Every answer is grounded in the
 retrieved chunks via the ^[cite:FilePath:startLine-endLine]^ marker convention
-so the frontend can render citations."""
+so the frontend can render citations.
+
+Uses NVIDIA NIM API (OpenAI-compatible) with automatic key rotation.
+Falls back to demo mode when no API keys are configured.
+"""
 
 import os
 import re
+import sys
+import logging
+
+# Add shared_python to path for key_rotation import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "shared_python", "src"))
+
+from shared.key_rotation import get_generation_rotator
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are Vibe Coder, a senior engineer preparing a candidate to explain their "
@@ -13,12 +26,16 @@ _SYSTEM_PROMPT = (
     "citation marker ^[cite:FilePath:startLine-endLine]^."
 )
 
+# NVIDIA NIM models
+NVIDIA_CHAT_MODEL = os.getenv("NVIDIA_CHAT_MODEL", "meta/llama-3.1-70b-instruct")
+
 
 def complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
     """Returns (answer, citations, isDemo)."""
-    if not os.getenv("OPENAI_API_KEY"):
+    rotator = get_generation_rotator()
+    if not rotator.has_keys:
         return _demo_complete(query, hits)
-    return _openai_complete(query, hits)
+    return _nvidia_complete(query, hits, rotator)
 
 
 def _demo_complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
@@ -50,25 +67,33 @@ def _demo_complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]
     return answer, [c for c in _citations_from(answer)], True
 
 
-def _openai_complete(query: str, hits: list[dict]) -> tuple[str, list[dict], bool]:
-    from openai import OpenAI
+def _nvidia_complete(
+    query: str, hits: list[dict], rotator
+) -> tuple[str, list[dict], bool]:
+    """Call NVIDIA NIM API with automatic key rotation on failure."""
 
-    client = OpenAI()
-    context = "\n\n".join(
-        "^^^ {filePath}:{startLine}-{endLine} ^^^\n{text}".format(**h) for h in hits
-    )
-    resp = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"Relevant code:\n{context}\n\nQuestion: {query}",
-            },
-        ],
-    )
-    text = resp.choices[0].message.content or ""
-    return text, [c for c in _citations_from(text)], False
+    def _call(client, key):
+        context = "\n\n".join(
+            "^^^ {filePath}:{startLine}-{endLine} ^^^\n{text}".format(**h) for h in hits
+        )
+        resp = client.chat.completions.create(
+            model=NVIDIA_CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Relevant code:\n{context}\n\nQuestion: {query}",
+                },
+            ],
+        )
+        return resp.choices[0].message.content or ""
+
+    try:
+        text = rotator.execute_with_fallback(_call)
+        return text, [c for c in _citations_from(text)], False
+    except Exception as e:
+        logger.error(f"[generation] All NVIDIA keys failed: {e}")
+        return _demo_complete(query, hits)
 
 
 def _citations_from(answer: str) -> list[dict]:

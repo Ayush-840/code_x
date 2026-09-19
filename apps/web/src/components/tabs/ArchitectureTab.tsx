@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { useAuthedFetch } from "@/lib/api";
 
 interface Component { name: string; role: string; dependsOn: string[]; }
+interface EntryPoint { path?: string; module?: string; }
+interface Stack { languages?: Record<string, number>; frameworks?: string[]; detected?: boolean; }
 interface Architecture {
   components?: Component[];
-  entryPoints?: string[];
-  stack?: string[];
+  entryPoints?: (string | EntryPoint)[];
+  stack?: Stack | string[];
   summary?: string;
   diagram?: string;
 }
@@ -43,13 +45,22 @@ export function ArchitectureTab({ repoId }: { repoId: string }) {
       )}
 
       {/* Tech stack */}
-      {arch.stack && arch.stack.length > 0 && (
+      {arch.stack && (
         <div className="card">
           <h3 style={S.cardH}>Technology Stack</h3>
           <div style={S.pillRow}>
-            {arch.stack.map((s) => (
-              <span key={s} className="badge badge-teal" style={{ fontSize: 13, padding: "5px 12px" }}>{s}</span>
-            ))}
+            {Array.isArray(arch.stack)
+              ? arch.stack.map((s) => (
+                  <span key={s} className="badge badge-teal" style={{ fontSize: 13, padding: "5px 12px" }}>{s}</span>
+                ))
+              : (() => {
+                  const stack = arch.stack as { languages?: Record<string, number>; frameworks?: string[] };
+                  const langs = stack.languages ? Object.keys(stack.languages) : [];
+                  const frameworks = stack.frameworks ?? [];
+                  return [...frameworks, ...langs].map((s) => (
+                    <span key={s} className="badge badge-teal" style={{ fontSize: 13, padding: "5px 12px" }}>{s}</span>
+                  ));
+                })()}
           </div>
         </div>
       )}
@@ -81,9 +92,16 @@ export function ArchitectureTab({ repoId }: { repoId: string }) {
         <div className="card">
           <h3 style={S.cardH}>Entry Points</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {arch.entryPoints.map((ep) => (
-              <code key={ep} style={S.codeChip}>{ep}</code>
-            ))}
+            {arch.entryPoints.map((ep, i) => {
+              let label: string;
+              if (typeof ep === "string") {
+                label = ep;
+              } else {
+                const obj = ep as EntryPoint;
+                label = `${obj.path ?? ""} (${obj.module ?? ""})`;
+              }
+              return <code key={i} style={S.codeChip}>{label}</code>;
+            })}
           </div>
         </div>
       )}

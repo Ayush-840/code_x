@@ -4,15 +4,15 @@ services:
     image: postgres:16-alpine
     container_name: vibecoder-postgres
     environment:
-      POSTGRES_USER: vibecoder
-      POSTGRES_PASSWORD: dev_password_123
-      POSTGRES_DB: vibecoder_dev
+      POSTGRES_USER: ${POSTGRES_USER:-vibecoder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in your .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-vibecoder_dev}
     ports:
       - "5433:5432"
     volumes:
       - vibecoder-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vibecoder"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vibecoder}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -52,11 +52,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://vibecoder:dev_password_123@postgres:5432/vibecoder_dev
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vibecoder}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vibecoder_dev}
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-32-char-string}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in your .env file}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID must be set in your .env file}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET must be set in your .env file}
       FRONTEND_URL: http://localhost:3000
       ANALYSIS_SERVICE_URL: http://analysis:8100
       RETRIEVAL_SERVICE_URL: http://retrieval:8200
@@ -79,7 +79,7 @@ services:
       NODE_ENV: production
       PORT: 4001
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-32-char-string}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in your .env file}
       FRONTEND_URL: http://localhost:3000
       GENERATION_SERVICE_URL: http://generation:8300
       MOCK_INTERVIEW_SERVICE_URL: http://mock-interview:8400
@@ -94,7 +94,7 @@ services:
     container_name: vibecoder-worker
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://vibecoder:dev_password_123@postgres:5432/vibecoder_dev
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vibecoder}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vibecoder_dev}
       REDIS_URL: redis://redis:6379
       ANALYSIS_SERVICE_URL: http://analysis:8100
       RETRIEVAL_SERVICE_URL: http://retrieval:8200

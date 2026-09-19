@@ -1,4 +1,17 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+
+// Load .env — try CWD first, then walk up to workspace root
+const rootEnv = resolve(process.cwd(), ".env");
+const workspaceRoot = resolve(process.cwd(), "../../.env");
+const paths = [rootEnv, workspaceRoot];
+for (const p of paths) {
+  if (existsSync(p)) {
+    loadEnv({ path: p });
+    break;
+  }
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];

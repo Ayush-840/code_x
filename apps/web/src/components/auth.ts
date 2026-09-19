@@ -9,12 +9,14 @@ export function useAuthRedirect(): "loading" | "authed" | "public" {
   const [status, setStatus] = useState<"loading" | "authed" | "public">("loading");
 
   useEffect(() => {
-    if (isAuthenticated()) {
-      setStatus("authed");
-      return;
-    }
-    router.replace("/login");
-    setStatus("public");
+    isAuthenticated().then((authed) => {
+      if (authed) {
+        setStatus("authed");
+      } else {
+        router.replace("/login");
+        setStatus("public");
+      }
+    });
   }, [router]);
 
   return status;

@@ -27,11 +27,11 @@ ENV SERVICE=${SERVICE}
 EXPOSE ${SERVICE_PORT:-8100}
 
 CMD if [ "$SERVICE" = "analysis" ]; then \
-      uvicorn packages.analysis.src.analysis.main:app --host 0.0.0.0 --port 8100; \
+      uvicorn analysis.main:app --host 0.0.0.0 --app-dir packages/analysis/src --port 8100; \
     elif [ "$SERVICE" = "retrieval" ]; then \
-      uvicorn packages.retrieval.src.retrieval.main:app --host 0.0.0.0 --port 8200; \
+      uvicorn retrieval.main:app --host 0.0.0.0 --app-dir packages/retrieval/src --port 8200; \
     elif [ "$SERVICE" = "generation" ]; then \
-      uvicorn packages.generation.src.generation.main:app --host 0.0.0.0 --port 8300; \
+      uvicorn generation.main:app --host 0.0.0.0 --app-dir packages/generation/src --port 8300; \
     elif [ "$SERVICE" = "mock-interview" ]; then \
-      uvicorn packages.mock_interview.src.mock_interview.main:app --host 0.0.0.0 --port 8400; \
+      uvicorn mock_interview.main:app --host 0.0.0.0 --app-dir packages/mock-interview/src --port 8400; \
     fi

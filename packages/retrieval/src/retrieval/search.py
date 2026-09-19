@@ -1,22 +1,34 @@
 """Hybrid search: dense (embedding cosine) + sparse (BM25), fused via RRF.
 
-The demo uses a local character n-gram embedding and rank-bm25 so retrieval
-works fully offline; swapping in OpenAI + Pinecone only changes the `_dense`
-function.
+Uses NVIDIA NIM embeddings (OpenAI-compatible) when API keys are set,
+otherwise falls back to a deterministic hashed n-gram embedding for
+offline/demo mode.
 """
 
 import hashlib
 import math
 import os
 import re
+import sys
 import unicodedata
+import logging
 
 from rank_bm25 import BM25Okapi
 
 from .indexing import get_chunks
 from .rrf import reciprocal_rank_fusion
 
+# Add shared_python to path for key_rotation import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "shared_python", "src"))
+
+from shared.key_rotation import get_embedding_rotator
+
+logger = logging.getLogger(__name__)
+
 _TOKEN_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
+
+# NVIDIA NIM embedding model
+NVIDIA_EMBED_MODEL = os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nv-embedqa-e5-v5")
 
 
 def _tokenize(text: str) -> list[str]:
@@ -52,11 +64,39 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
+def _get_embedder():
+    """Get the appropriate embedder based on environment."""
+    rotator = get_embedding_rotator()
+    if rotator.has_keys:
+        return _NvidiaEmbedder(rotator)
+    return _LocalDenseEmbedder()
+
+
+class _NvidiaEmbedder:
+    """Production embedding using NVIDIA NIM API with key rotation."""
+
+    def __init__(self, rotator) -> None:
+        self.rotator = rotator
+        self.dim = 2048  # nemotron-3-embed-1b dimension
+
+    def embed(self, text: str) -> list[float]:
+        truncated = text[:8000]
+
+        def _call(client, key):
+            resp = client.embeddings.create(
+                model=NVIDIA_EMBED_MODEL,
+                input=truncated,
+            )
+            return resp.data[0].embedding
+
+        return self.rotator.execute_with_fallback(_call)
+
+
 def _dense_search(repo_id: str, query: str, top_k: int) -> list[dict]:
     chunks = get_chunks(repo_id)
     if not chunks:
         return []
-    embedder = _LocalDenseEmbedder()
+    embedder = _get_embedder()
     q = embedder.embed(query)
     scored = [(c, _cosine(q, embedder.embed(c["text"]))) for c in chunks]
     scored.sort(key=lambda kv: kv[1], reverse=True)
@@ -103,28 +143,3 @@ def hybrid_search(repo_id: str, query: str, top_k: int) -> dict:
         fused = True
 
     return {"hits": hits, "fused": fused, "repoId": repo_id}
-
-
-def _openai_dense_search(repo_id: str, query: str, top_k: int) -> list[dict]:  # pragma: no cover
-    """Production dense path — requires OPENAI_API_KEY + Pinecone."""
-    from openai import OpenAI
-
-    client = OpenAI()
-    resp = client.embeddings.create(model="text-embedding-3-small", input=query)
-    vector = resp.data[0].embedding
-    from pinecone import Pinecone
-
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY", ""))
-    idx = pc.Index(os.getenv("PINECONE_INDEX", "vibecoder"))
-    result = idx.query(vector=vector, top_k=top_k, namespace=repo_id, include_metadata=True)
-    return [
-        {
-            "id": m.id,
-            "filePath": m.metadata.get("filePath", ""),
-            "startLine": m.metadata.get("startLine", 1),
-            "endLine": m.metadata.get("endLine", 1),
-            "text": m.metadata.get("text", ""),
-            "score": m.score or 0.0,
-        }
-        for m in result.matches
-    ]

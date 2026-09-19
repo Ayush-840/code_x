@@ -72,7 +72,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     setMounted(true);
-    if (isAuthenticated()) router.replace("/dashboard");
+    isAuthenticated().then((authed) => {
+      if (authed) router.replace("/dashboard");
+    });
   }, [router]);
 
   if (!mounted) {

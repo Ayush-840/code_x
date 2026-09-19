@@ -13,12 +13,13 @@ export function requireAuth(
   _res: Response,
   next: NextFunction
 ): void {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  // Read token from httpOnly cookie (set during OAuth callback)
+  const token = req.cookies?.access_token;
+  if (!token) {
     throw new HttpError(401, "UNAUTHORIZED", "Missing or invalid authentication token");
   }
   try {
-    const payload = jwt.verify(header.slice(7), config.jwtSecret) as {
+    const payload = jwt.verify(token, config.jwtSecret) as {
       sub: string;
       githubId: number;
     };

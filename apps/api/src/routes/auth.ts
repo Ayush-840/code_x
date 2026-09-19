@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { Octokit } from "octokit";
 import { prisma } from "../db";
 import { config } from "../config";
+import { requireAuth, type AuthedRequest } from "../middleware/auth";
 import { HttpError, ok } from "../middleware/errors";
 
 const router = Router();
@@ -194,6 +195,22 @@ router.delete("/logout", async (req, res, next) => {
     }
     clearAuthCookies(res);
     ok(res, { success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /v1/auth/me — return current user (used by frontend to check auth state)
+router.get("/me", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, username: true, email: true, avatarUrl: true, githubId: true },
+    });
+    if (!user) {
+      throw new HttpError(404, "NOT_FOUND", "User not found");
+    }
+    ok(res, user);
   } catch (err) {
     next(err);
   }

@@ -1,14 +1,24 @@
-"""Indexing: dense embeddings (OpenAI/Pinecone or a local fallback) plus a
-sparse BM25 corpus stored in-memory (and optionally mirrored to OpenSearch)."""
+"""Indexing: persistent chunk storage with file-based persistence.
+
+Chunks are stored in JSON files per repo, surviving restarts.
+Embeddings are computed on-demand using the configured embedder.
+"""
 
 import hashlib
+import json
 import os
+from pathlib import Path
 
-# artifact id -> chunk metadata + text, per repo
-_CHUNKS: dict[str, list[dict]] = {}
+# Storage directory for persisted chunks
+_STORAGE_DIR = Path(os.getenv("RETRIEVAL_STORAGE_DIR", "/tmp/vibecoder-retrieval"))
 
-_OPENSEARCH_URL = os.getenv("OPENSEARCH_URL", "http://localhost:9200")
-_INDEX_NAME = "code_chunks"
+
+def _ensure_storage_dir() -> None:
+    _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _repo_file(repo_id: str) -> Path:
+    return _STORAGE_DIR / f"{repo_id}.json"
 
 
 def _chunk_id(repo_id: str, file_path: str, start_line: int) -> str:
@@ -18,6 +28,8 @@ def _chunk_id(repo_id: str, file_path: str, start_line: int) -> str:
 def index_chunks(repo_id: str, chunks: list[dict]) -> int:
     """Index chunks for a repo so `search` can retrieve them. Idempotent:
     re-indexing the same repo upserts by a deterministic chunk id."""
+    _ensure_storage_dir()
+
     records: list[dict] = []
     for i, chunk in enumerate(chunks):
         start = int(chunk.get("startLine", 1))
@@ -34,57 +46,45 @@ def index_chunks(repo_id: str, chunks: list[dict]) -> int:
             }
         )
 
-    existing = {r["id"]: r for r in _CHUNKS.get(repo_id, [])}
+    # Load existing chunks and merge (upsert by id)
+    existing = {r["id"]: r for r in _load_chunks(repo_id)}
     existing.update({r["id"]: r for r in records})
-    _CHUNKS[repo_id] = list(existing.values())
+    all_chunks = list(existing.values())
 
-    _mirror_to_opensearch(repo_id, records)
+    # Persist to disk
+    _save_chunks(repo_id, all_chunks)
+
     return len(records)
 
 
-def _mirror_to_opensearch(repo_id: str, records: list[dict]) -> None:
-    """Best-effort mirror to OpenSearch. Swallows errors so the demo keeps
-    working without it."""
+def _load_chunks(repo_id: str) -> list[dict]:
+    """Load chunks from disk for a repo."""
+    path = _repo_file(repo_id)
+    if not path.exists():
+        return []
     try:
-        import httpx
-
-        body = ""
-        for r in records:
-            body += (
-                '{"index": {"_index": "%s"}}\n'
-                '{"id": "%s", "repoId": "%s", "filePath": "%s", '
-                '"startLine": %d, "endLine": %d, "text": %s}\n'
-                % (
-                    _INDEX_NAME,
-                    r["id"],
-                    r["repoId"],
-                    r["filePath"].replace('"', '\\"'),
-                    r["startLine"],
-                    r["endLine"],
-                    _json_escape(r["text"]),
-                )
-            )
-        if body:
-            # create index if missing, then bulk
-            with httpx.Client(timeout=5.0) as client:
-                try:
-                    client.put(f"{_OPENSEARCH_URL}/{_INDEX_NAME}")
-                except Exception:
-                    pass
-                client.post(
-                    f"{_OPENSEARCH_URL}/_bulk",
-                    content=body,
-                    headers={"Content-Type": "application/x-ndjson"},
-                )
-    except Exception as exc:  # pragma: no cover
-        print(f"[retrieval] OpenSearch mirror skipped: {exc}")
+        with open(path, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
 
 
-def _json_escape(text: str) -> str:
-    import json
-
-    return json.dumps(text, ensure_ascii=False)
+def _save_chunks(repo_id: str, chunks: list[dict]) -> None:
+    """Save chunks to disk for a repo."""
+    path = _repo_file(repo_id)
+    with open(path, "w") as f:
+        json.dump(chunks, f, indent=2)
 
 
 def get_chunks(repo_id: str) -> list[dict]:
-    return _CHUNKS.get(repo_id, [])
+    """Get all chunks for a repo."""
+    return _load_chunks(repo_id)
+
+
+def delete_repo_chunks(repo_id: str) -> bool:
+    """Delete all chunks for a repo. Returns True if files existed."""
+    path = _repo_file(repo_id)
+    if path.exists():
+        path.unlink()
+        return True
+    return False

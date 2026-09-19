@@ -25,11 +25,13 @@ function LoginContent() {
       return;
     }
     // Already logged in
-    if (isAuthenticated()) {
-      router.replace("/dashboard");
-      return;
-    }
-    setMode("ready");
+    isAuthenticated().then((authed) => {
+      if (authed) {
+        router.replace("/dashboard");
+      } else {
+        setMode("ready");
+      }
+    });
   }, [params, router]);
 
   const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";

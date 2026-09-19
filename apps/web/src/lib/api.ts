@@ -10,11 +10,20 @@ export class ApiError extends Error {
   }
 }
 
-export function isAuthenticated(): boolean {
+/**
+ * Check if the user is authenticated by calling /v1/auth/me.
+ * This is the only reliable way to check auth state with httpOnly cookies.
+ */
+export async function isAuthenticated(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  // httpOnly cookies are sent automatically; we can't read them directly.
-  // Instead, try a lightweight request to check.
-  return document.cookie.includes("access_token=");
+  try {
+    const res = await fetch(`${API_URL}/v1/auth/me`, {
+      credentials: "include",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
