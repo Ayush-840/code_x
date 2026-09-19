@@ -34,6 +34,9 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/
 # Install production dependencies with hoisting to create symlinks
 RUN corepack enable && pnpm install --frozen-lockfile --prod --shamefully-hoist
 
+# Fix prisma engine permissions (engines need to be writable for downloads)
+RUN chmod -R u+w /app/node_modules/.pnpm/@prisma+engines@* 2>/dev/null || true
+
 # Copy built files and other assets
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
