@@ -10,7 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/code_x
+  IMAGE_PREFIX: ghcr.io/${{ lower(github.repository_owner) }}/code_x
 
 jobs:
   build-api:
