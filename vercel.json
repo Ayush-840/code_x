@@ -1,7 +1,5 @@
 {
-  "buildCommand": "pnpm --filter @vibe-coder/web run build",
+  "buildCommand": "cd apps/web && pnpm install --frozen-lockfile && pnpm run build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "pnpm install",
-  "framework": "nextjs",
-  "rootDirectory": "apps/web"
+  "framework": "nextjs"
 }
