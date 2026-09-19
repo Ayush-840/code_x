@@ -28,7 +28,19 @@ router.post("/connect", async (req: AuthedRequest, res, next) => {
     const { owner, repo } = parseRepoUrl(repoUrl);
 
     const octokit = new Octokit({ auth: accessToken });
-    const gh = await octokit.rest.repos.get({ owner, repo });
+    let gh;
+    try {
+      gh = await octokit.rest.repos.get({ owner, repo });
+    } catch (ghErr: any) {
+      const status = ghErr?.status ?? ghErr?.response?.status;
+      if (status === 401) {
+        throw new HttpError(401, "INVALID_TOKEN", "GitHub token is invalid or expired");
+      }
+      if (status === 404) {
+        throw new HttpError(404, "REPO_NOT_FOUND", `Repository ${owner}/${repo} not found. Check the URL and token permissions.`);
+      }
+      throw new HttpError(502, "GITHUB_API_ERROR", `GitHub API error: ${ghErr?.message ?? "unknown"}`);
+    }
     const languages = await octokit.rest.repos.listLanguages({ owner, repo });
     const primaryLang =
       Object.entries(languages.data).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;

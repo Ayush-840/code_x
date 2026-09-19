@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from pathlib import Path
 
 from .parser import parse_repo
 from .chunker import chunk_source
@@ -29,10 +30,12 @@ def health() -> dict:
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest) -> dict:
     modules, symbols = parse_repo(req.repoPath)
+    repo_root = Path(req.repoPath)
     chunks: list[Chunk] = []
     for mod in modules:
-        for path in mod["files"]:
-            chunks.extend(Chunk(**c) for c in chunk_source(path))
+        for rel_path in mod["files"]:
+            full_path = str(repo_root / rel_path)
+            chunks.extend(Chunk(**c) for c in chunk_source(full_path))
     return {
         "modules": [
             {

@@ -28,19 +28,6 @@ services:
       timeout: 5s
       retries: 10
 
-  opensearch:
-    image: opensearchproject/opensearch:2.15.0
-    container_name: vibecoder-opensearch
-    environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "9200:9200"
-      - "9600:9600"
-    volumes:
-      - vibecoder-osdata:/usr/share/opensearch/data
-
   # ── Application Services ───────────────────────────────────
   api:
     build:
@@ -127,7 +114,10 @@ services:
     ports:
       - "8200:8200"
     environment:
-      OPENSEARCH_URL: http://opensearch:9200
+      RETRIEVAL_STORAGE_DIR: /tmp/vibecoder-retrieval
+      NVIDIA_API_KEYS: ${NVIDIA_API_KEYS:-}
+    volumes:
+      - vibecoder-retrieval-data:/tmp/vibecoder-retrieval
 
   generation:
     build:
@@ -140,7 +130,9 @@ services:
       - "8300:8300"
     environment:
       RETRIEVAL_SERVICE_URL: http://retrieval:8200
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      NVIDIA_API_KEYS: ${NVIDIA_API_KEYS:-}
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
   mock-interview:
     build:
@@ -169,4 +161,4 @@ services:
 
 volumes:
   vibecoder-pgdata:
-  vibecoder-osdata:
+  vibecoder-retrieval-data:

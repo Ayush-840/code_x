@@ -1,7 +1,7 @@
 """Indexing: persistent chunk storage with file-based persistence.
 
 Chunks are stored in JSON files per repo, surviving restarts.
-Embeddings are computed on-demand using the configured embedder.
+Embeddings are computed once at index time and persisted alongside each chunk.
 """
 
 import hashlib
@@ -25,36 +25,57 @@ def _chunk_id(repo_id: str, file_path: str, start_line: int) -> str:
     return hashlib.sha1(f"{repo_id}:{file_path}:{start_line}".encode()).hexdigest()[:16]
 
 
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
 def index_chunks(repo_id: str, chunks: list[dict]) -> int:
     """Index chunks for a repo so `search` can retrieve them. Idempotent:
-    re-indexing the same repo upserts by a deterministic chunk id."""
+    re-indexing the same repo upserts by a deterministic chunk id.
+    Embeddings are computed once and persisted; unchanged chunks reuse their stored vector."""
     _ensure_storage_dir()
 
+    # Import embedder lazily to avoid circular imports
+    from .search import _get_embedder
+
+    embedder = _get_embedder()
+
+    # Load existing chunks for reuse of unchanged embeddings
+    existing = {r["id"]: r for r in _load_chunks(repo_id)}
+
     records: list[dict] = []
+    new_or_changed = 0
     for i, chunk in enumerate(chunks):
         start = int(chunk.get("startLine", 1))
         file_path = str(chunk.get("filePath", f"chunk-{i}"))
+        text = str(chunk.get("text", ""))
         cid = _chunk_id(repo_id, file_path, start)
-        records.append(
-            {
-                "id": cid,
-                "repoId": repo_id,
-                "filePath": file_path,
-                "startLine": start,
-                "endLine": int(chunk.get("endLine", start)),
-                "text": str(chunk.get("text", "")),
-            }
-        )
+        th = _text_hash(text)
 
-    # Load existing chunks and merge (upsert by id)
-    existing = {r["id"]: r for r in _load_chunks(repo_id)}
-    existing.update({r["id"]: r for r in records})
-    all_chunks = list(existing.values())
+        # Reuse existing embedding if text hasn't changed
+        if cid in existing and existing[cid].get("textHash") == th and "embedding" in existing[cid]:
+            records.append(existing[cid])
+        else:
+            # Compute and persist embedding
+            embedding = embedder.embed(text)
+            records.append(
+                {
+                    "id": cid,
+                    "repoId": repo_id,
+                    "filePath": file_path,
+                    "startLine": start,
+                    "endLine": int(chunk.get("endLine", start)),
+                    "text": text,
+                    "textHash": th,
+                    "embedding": embedding,
+                }
+            )
+            new_or_changed += 1
 
     # Persist to disk
-    _save_chunks(repo_id, all_chunks)
+    _save_chunks(repo_id, records)
 
-    return len(records)
+    return new_or_changed
 
 
 def _load_chunks(repo_id: str) -> list[dict]:

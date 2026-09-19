@@ -98,7 +98,15 @@ def _dense_search(repo_id: str, query: str, top_k: int) -> list[dict]:
         return []
     embedder = _get_embedder()
     q = embedder.embed(query)
-    scored = [(c, _cosine(q, embedder.embed(c["text"]))) for c in chunks]
+    # Use stored embeddings when available, otherwise compute on the fly
+    scored = []
+    for c in chunks:
+        stored_emb = c.get("embedding")
+        if stored_emb:
+            vec = stored_emb
+        else:
+            vec = embedder.embed(c["text"])
+        scored.append((c, _cosine(q, vec)))
     scored.sort(key=lambda kv: kv[1], reverse=True)
     return [
         {"id": c["id"], **{k: c[k] for k in ("filePath", "startLine", "endLine", "text")}, "score": s}

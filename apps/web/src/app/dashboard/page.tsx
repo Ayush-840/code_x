@@ -204,6 +204,7 @@ function UsageTile({ icon, label, used, remaining }: { icon: string; label: stri
 function RepoCard({ repo, progress, onAnalyze }: { repo: Repository; progress?: Progress; onAnalyze: (token: string) => Promise<void>; }) {
   const [token, setToken] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const router = useRouter();
   const isActive = progress && progress.progress < 100;
   const badgeClass = STATUS_BADGE[repo.status] ?? "badge-gray";
 
@@ -243,7 +244,7 @@ function RepoCard({ repo, progress, onAnalyze }: { repo: Repository; progress?: 
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {repo.status === "READY" ? (
-            <button className="btn btn-primary btn-sm" onClick={() => window.location.assign(`/repos/${repo.id}`)}>
+            <button className="btn btn-primary btn-sm" onClick={() => router.push(`/repos/${repo.id}`)}>
               Open study guide →
             </button>
           ) : (

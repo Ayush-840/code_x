@@ -1,6 +1,14 @@
 import os
 
 import httpx
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env from workspace root
+for p in [Path(__file__).resolve().parent.parent.parent.parent.parent / ".env", Path.cwd() / ".env"]:
+    if p.exists():
+        load_dotenv(p)
+        break
 
 from fastapi import FastAPI
 from pydantic import BaseModel
