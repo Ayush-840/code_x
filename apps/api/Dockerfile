@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN apk add --no-cache git
+RUN apk add --no-cache git openssl
 WORKDIR /app
 
 FROM base AS deps
@@ -19,6 +19,7 @@ RUN corepack enable && pnpm --filter @vibe-coder/database exec prisma generate
 RUN pnpm --filter @vibe-coder/api build
 
 FROM node:20-alpine AS runner
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 apiuser
@@ -36,6 +37,10 @@ RUN corepack enable && pnpm install --frozen-lockfile --prod --shamefully-hoist
 
 # Fix prisma engine permissions (engines need to be writable for downloads)
 RUN chmod -R u+w /app/node_modules/.pnpm/@prisma+engines@* 2>/dev/null || true
+
+# Set Prisma engines mirror to writable location
+ENV PRISMA_ENGINES_MIRROR=/tmp/prisma-engines
+RUN mkdir -p /tmp/prisma-engines && chmod 777 /tmp/prisma-engines
 
 # Copy built files and other assets
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
