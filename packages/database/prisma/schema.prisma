@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
+  INSTITUTIONAL
+}
+
+enum RepoStatus {
+  PENDING
+  PARSING
+  INDEXING
+  GENERATING
+  READY
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum SymbolType {
+  function
+  class
+  method
+  type
+  enum
+  interface
+  macro
+}
+
+model User {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  githubId              Int                    @unique
+  email                 String?                @unique
+  username              String                 @unique
+  avatarUrl             String?
+  planTier              PlanTier               @default(FREE)
+  repositories          Repository[]
+  subscriptions        Subscription[]
+  chatSessions          ChatSession[]
+  mockInterviewSessions MockInterviewSession[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+}
+
+model Repository {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  userId                String                 @db.Uuid
+  user                  User                   @relation(fields: [userId], references: [id])
+  fullName              String
+  defaultBranch         String                 @default("main")
+  primaryLanguage       String?
+  totalFiles            Int                    @default(0)
+  totalLines            Int                    @default(0)
+  status                RepoStatus             @default(PENDING)
+  lastAnalyzedAt        DateTime?
+  analysisJobs          AnalysisJob[]
+  modules               CodeModule[]
+  artifacts             Artifact[]
+  chatSessions          ChatSession[]
+  mockInterviewSessions MockInterviewSession[]
+  createdAt             DateTime               @default(now())
+
+  @@unique([userId, fullName])
+  @@index([userId])
+}
+
+model AnalysisJob {
+  id            String      @id @default(uuid()) @db.Uuid
+  repoId        String      @db.Uuid
+  repo          Repository  @relation(fields: [repoId], references: [id])
+  status        JobStatus   @default(QUEUED)
+  stage         String?
+  progress      Int         @default(0)
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  modules       CodeModule[]
+  artifacts     Artifact[]
+  createdAt     DateTime    @default(now())
+
+  @@index([repoId])
+}
+
+model CodeModule {
+  id               String         @id @default(uuid()) @db.Uuid
+  repoId           String         @db.Uuid
+  repo             Repository     @relation(fields: [repoId], references: [id])
+  jobId            String?        @db.Uuid
+  job              AnalysisJob?   @relation(fields: [jobId], references: [id])
+  name             String
+  path             String
+  purposeSummary   String?
+  complexityScore  Float?
+  fileCount        Int            @default(0)
+  lineCount        Int            @default(0)
+  symbols          CodeSymbol[]
+  createdAt        DateTime       @default(now())
+
+  @@unique([repoId, name])
+  @@index([repoId])
+}
+
+model CodeSymbol {
+  id           String     @id @default(uuid()) @db.Uuid
+  moduleId     String     @db.Uuid
+  module       CodeModule @relation(fields: [moduleId], references: [id])
+  symbolType   SymbolType
+  name         String
+  signature    String
+  filePath     String
+  startLine    Int
+  endLine      Int
+  complexity   Float?
+  dependencies String[]   @default([])
+  docstring    String?
+  createdAt    DateTime   @default(now())
+
+  @@index([moduleId])
+  @@index([filePath])
+}
+
+model Artifact {
+  id           String       @id @default(uuid()) @db.Uuid
+  repoId       String       @db.Uuid
+  repo         Repository   @relation(fields: [repoId], references: [id])
+  jobId        String?      @db.Uuid
+  job          AnalysisJob? @relation(fields: [jobId], references: [id])
+  artifactType String
+  content      Json
+  version      Int          @default(1)
+  generatedAt  DateTime     @default(now())
+
+  @@unique([repoId, artifactType, version])
+  @@index([repoId])
+}
+
+model ChatSession {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id])
+  repoId    String        @db.Uuid
+  repo      Repository    @relation(fields: [repoId], references: [id])
+  title     String
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+}
+
+model ChatMessage {
+  id         String      @id @default(uuid()) @db.Uuid
+  sessionId  String      @db.Uuid
+  session    ChatSession @relation(fields: [sessionId], references: [id])
+  role       String
+  content    String
+  citations  Json        @default("[]")
+  tokensUsed Int?
+  createdAt  DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
+model MockInterviewSession {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  userId             String                 @db.Uuid
+  user               User                   @relation(fields: [userId], references: [id])
+  repoId             String                 @db.Uuid
+  repo               Repository             @relation(fields: [repoId], references: [id])
+  persona            String
+  difficulty         String
+  status             String                 @default("IN_PROGRESS")
+  scoreOverall       Float?
+  scoreClarity       Float?
+  scoreDepth         Float?
+  scoreSpecificity   Float?
+  questions          MockInterviewQuestion[]
+  startedAt          DateTime               @default(now())
+  completedAt        DateTime?
+}
+
+model MockInterviewQuestion {
+  id           String               @id @default(uuid()) @db.Uuid
+  sessionId    String               @db.Uuid
+  session      MockInterviewSession @relation(fields: [sessionId], references: [id])
+  questionText String
+  answerText   String?
+  citations    Json                 @default("[]")
+  score        Float?
+  feedback     String?
+  timeSpentSec Int?
+  createdAt    DateTime             @default(now())
+}
+
+model Subscription {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @db.Uuid
+  user                    User     @relation(fields: [userId], references: [id])
+  planTier                PlanTier @default(FREE)
+  reposRemaining          Int      @default(1)
+  chatsRemaining          Int      @default(20)
+  mockInterviewsRemaining Int      @default(1)
+  billingCycle            String   @default("monthly")
+  createdAt               DateTime @default(now())
+  expiresAt               DateTime?
+}

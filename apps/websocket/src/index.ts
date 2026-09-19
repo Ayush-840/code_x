@@ -1,0 +1,101 @@
+import { createServer } from "node:http";
+import { Server, type Socket } from "socket.io";
+import { Redis } from "ioredis";
+import { createAdapter } from "@socket.io/redis-adapter";
+import "dotenv/config";
+
+import { verifyToken } from "./auth";
+import { handleChatSend } from "./handlers/chat";
+import {
+  handleInterviewStart,
+  handleInterviewAnswer,
+  handleInterviewNext,
+  handleInterviewComplete,
+} from "./handlers/mockInterview";
+
+const PORT = Number(process.env.PORT ?? 4001);
+const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+
+const pubClient = new Redis(REDIS_URL);
+const subClient = pubClient.duplicate();
+
+const httpServer = createServer();
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+    credentials: true,
+  },
+  adapter: createAdapter(pubClient, subClient),
+});
+
+// Subscribe to analysis pipeline progress published by api/worker.
+pubClient.subscribe("analysis-progress");
+pubClient.on("message", (_channel, message) => {
+  try {
+    const { jobId, repoId, stage, progress, message: text } = JSON.parse(message) as {
+      jobId: string;
+      repoId?: string;
+      stage: string;
+      progress: number;
+      message: string;
+    };
+    io.to(`job:${jobId}`).emit("analysis:progress", {
+      repoId: repoId ?? jobId,
+      stage,
+      progress,
+      message: text,
+    });
+  } catch {
+    // ignore malformed progress messages
+  }
+});
+
+io.use((socket: Socket, next) => {
+  try {
+    const token =
+      (socket.handshake.auth?.token as string | undefined) ??
+      (socket.handshake.headers.authorization?.replace(/^Bearer /, "") as string | undefined);
+    const payload = verifyToken(token);
+    (socket.data as { userId: string }).userId = payload.userId;
+    next();
+  } catch {
+    next(new Error("UNAUTHORIZED"));
+  }
+});
+
+const REPO_ROOM = (userId: string, repoId: string) => `${userId}:repo:${repoId}`;
+
+io.on("connection", (socket) => {
+  const userId = (socket.data as { userId: string }).userId;
+
+  socket.on("repo:join", ({ repoId, jobId }: { repoId?: string; jobId?: string }) => {
+    if (repoId) socket.join(REPO_ROOM(userId, repoId));
+    if (jobId) socket.join(`job:${jobId}`);
+  });
+
+  socket.on("chat:send", async ({ sessionId, content }) => {
+    await handleChatSend(io, socket, userId, { sessionId, content });
+  });
+
+  socket.on("mock-interview:start", async ({ repoId, persona, difficulty }) => {
+    await handleInterviewStart(io, socket, { repoId, persona, difficulty });
+  });
+
+  socket.on("mock-interview:answer", async ({ sessionId, answer }) => {
+    await handleInterviewAnswer(io, socket, { sessionId, answer });
+  });
+
+  socket.on("mock-interview:next", async ({ sessionId }) => {
+    await handleInterviewNext(io, socket, { sessionId });
+  });
+
+  socket.on("mock-interview:complete", async ({ sessionId }) => {
+    await handleInterviewComplete(io, socket, { sessionId });
+  });
+});
+
+export { io, REPO_ROOM };
+
+httpServer.listen(PORT, () => {
+  console.log(`[websocket] listening on :${PORT}`);
+});

@@ -1,0 +1,15 @@
+{
+  "name": "vibe-coder",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter './apps/*' --filter './packages/*' dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @vibe-coder/database prisma generate",
+    "db:migrate": "pnpm --filter @vibe-coder/database prisma migrate dev --name init",
+    "db:seed": "pnpm --filter @vibe-coder/database prisma db seed"
+  }
+}

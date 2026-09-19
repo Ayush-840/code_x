@@ -1,280 +1,196 @@
-# Vibe Coder On-Call Runbook
-
-## Incident Response, Troubleshooting & Operational Procedures
+# Vibe Coder — On-Call Runbook & Incident Response Procedures
 
 ---
 
-## 1. On-Call Rotation
+## 1. On-Call Overview
 
-### 1.1 Rotation Schedule
+### 1.1 On-Call Rotation
 
-| Role | Schedule | Responsibilities |
+| Role | Responsibility | Hours | Escalation |
+|---|---|---|---|
+| **Primary On-Call** | First responder, triage, initial mitigation | 24/7 (1-week shifts) | Escalate after 30 min if unresolved |
+| **Secondary On-Call** | Backup, assist with complex issues | 24/7 (1-week shifts) | Step in if Primary unavailable |
+| **Engineering Manager** | Resource allocation, communication | Business hours + on-call escalation | Escalate after 1 hour |
+| **VP of Engineering** | Executive decisions, external communication | Escalation only | Escalate for P1 incidents |
+
+### 1.2 Communication Channels
+
+| Channel | Purpose | When to Use |
 |---|---|---|
-| **Primary On-Call** | Monday 9 AM → Monday 9 AM (weekly) | First responder, triage, mitigate, communicate |
-| **Secondary On-Call** | Same as primary | Backup if primary is unreachable, assist on P1/P2 |
-| **Engineering Manager** | Escalation point | External comms, resource allocation, go/no-go on rollback |
+| `#incident-active` (Slack) | Real-time incident coordination | All P1/P2 incidents |
+| `#oncall-alerts` (Slack) | Automated alert delivery | All alerts |
+| `#engineering` (Slack) | General engineering updates | P3 incidents, maintenance |
+| PagerDuty | Pager escalation | P1 alerts, after-hours |
+| StatusPage | Public status updates | P1 incidents affecting users |
+| Bridge call | Voice coordination | Complex multi-service incidents |
 
-**Rotation order:** The on-call schedule is maintained in PagerDuty. Shifts rotate every Monday at 9:00 AM UTC.
+### 1.3 Incident Severity Matrix
 
-### 1.2 On-Call Expectations
-
-- Respond to pages within **5 minutes** during business hours, **15 minutes** off-hours
-- Acknowledge PagerDuty alerts within **2 minutes**
-- Provide initial assessment within **15 minutes** of page
-- Update status page within **30 minutes** for user-impacting incidents
-- Complete incident within **2 hours** for P1, **4 hours** for P2
-
-### 1.3 Contact Directory
-
-| Role | Name | Phone | Slack | PagerDuty |
+| Severity | Definition | Response Time | Resolution Target | Examples |
 |---|---|---|---|---|
-| Primary On-Call | (rotating) | — | #oncall | @oncall-primary |
-| Secondary On-Call | (rotating) | — | #oncall | @oncall-secondary |
-| Engineering Manager | (assigned) | (phone) | @eng-manager | @eng-manager |
-| Infra Lead | (assigned) | (phone) | @infra-lead | — |
-| DBA | (assigned) | (phone) | @dba | — |
-
-### 1.4 Communication Channels
-
-| Channel | Purpose |
-|---|---|
-| `#incidents` | Active incident coordination |
-| `#oncall` | On-call handoffs, questions, non-urgent alerts |
-| `#deployments` | Deployment notifications and rollbacks |
-| `#status-page` | Updates for external status page |
-| **PagerDuty** | P1/P2 alerting |
-| **Email** | Stakeholder updates for P1 incidents |
+| **P1 — Critical** | Service completely down, data loss, security breach | 5 min | 1 hour | All users unable to log in; data breach confirmed; database corruption |
+| **P2 — Major** | Core feature unavailable, significant degradation | 15 min | 4 hours | Analysis pipeline down; chat not working; payments failing |
+| **P3 — Minor** | Feature degraded, workaround exists | 1 hour | 24 hours | Slow retrieval; occasional WebSocket disconnects; UI glitches |
+| **P4 — Low** | Cosmetic issue, non-urgent | Next business day | 1 week | Typos; minor UI inconsistencies; non-critical log errors |
 
 ---
 
-## 2. Severity Levels
+## 2. Quick Reference — Common Incidents
 
-### 2.1 Classification Matrix
+### 2.1 Alert → Runbook Quick Map
 
-| Severity | Definition | Response Time | Update Cadence | Resolution Target |
-|---|---|---|---|---|
-| **P1 — Critical** | Complete service outage, data loss risk, security breach | 5 min | Every 30 min | 2 hours |
-| **P2 — High** | Major feature degraded, significant user impact | 15 min | Every 1 hour | 4 hours |
-| **P3 — Medium** | Minor feature degraded, workaround available | 30 min | Every 4 hours | 24 hours |
-| **P4 — Low** | Cosmetic issue, no user impact, internal tooling | Next business day | Daily | 1 week |
-
-### 2.2 Impact Assessment Criteria
-
-**User Impact:**
-- How many users are affected? (All / Many / Few / None)
-- Can users complete core workflows? (No / Partially / Yes)
-- Is data at risk? (Yes / No)
-- Is revenue affected? (Yes / No)
-
-**Service Impact:**
-- Which services are affected?
-- Is the issue intermittent or persistent?
-- Is it a degradation or complete failure?
-- Are downstream services also affected?
+| Alert Name | Severity | Runbook Section | First Action |
+|---|---|---|---|
+| `AnalysisJobFailureRateHigh` | P2 | §3.2 | Check worker logs, verify queue depth |
+| `APILatencyP95High` | P2 | §3.3 | Check database connections, Redis cache hit rate |
+| `RetrievalLatencyHigh` | P2 | §3.4 | Check Elasticsearch/Pinecone health, index size |
+| `LLMGenerationLatencyHigh` | P2 | §3.5 | Check OpenAI status, token usage, queue backlog |
+| `WebSocketConnectionFailure` | P2 | §3.6 | Check Redis pub/sub, load balancer sticky sessions |
+| `DatabaseConnectionPoolExhausted` | P1 | §3.7 | Check PgBouncer, kill long-running queries |
+| `GitHubAPIRateLimitExceeded` | P3 | §3.8 | Check token pool, reduce analysis concurrency |
+| `OpenAIQuotaExceeded` | P1 | §3.9 | Check billing, switch to fallback model |
+| `DiskSpaceLow` | P2 | §3.10 | Clean old repo clones, check S3 lifecycle |
+| `MemoryUsageCritical` | P2 | §3.11 | Identify leaky service, restart if needed |
+| `ErrorRateSpike` | P1 | §3.12 | Check recent deployments, roll back if needed |
+| `PaymentProcessingFailure` | P2 | §3.13 | Check Stripe status, verify webhook delivery |
 
 ---
 
-## 3. Incident Response Playbook
+## 3. Detailed Incident Procedures
 
-### 3.1 Standard Response Flow
+### 3.1 General Incident Response Process
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    INCIDENT RESPONSE FLOW                    │
-├─────────────────────────────────────────────────────────────┤
+┌────────────────────────────────────────────────────────────┐
+│              INCIDENT RESPONSE LIFECYCLE                     │
 │                                                              │
-│  1. DETECT                                                   │
-│     ├─ Alert fires (PagerDuty / CloudWatch)                 │
-│     ├─ User reports (support ticket / Slack)                │
-│     └─ Monitoring dashboard anomaly                          │
+│  ┌──────┐   ┌──────┐   ┌──────────┐   ┌──────────┐       │
+│  │DETECT│──▶│TRIAGE│──▶│MITIGATE  │──▶│RESOLVE   │       │
+│  └──────┘   └──────┘   └──────────┘   └──────────┘       │
+│     │           │           │               │               │
+│     │           │           │               ▼               │
+│     │           │           │          ┌──────────┐        │
+│     │           │           │          │ POST-    │        │
+│     │           │           │          │MORTEM    │        │
+│     │           │           │          └──────────┘        │
+│     │           │           │                               │
+│     ▼           ▼           ▼                               │
+│  ┌──────────────────────────────────────────────┐          │
+│  │  1. Alert fires → Acknowledge in PagerDuty   │          │
+│  │  2. Assess severity → Set incident channel   │          │
+│  │  3. Begin investigation → Update timeline    │          │
+│  │  4. Mitigate → Restore service               │          │
+│  │  5. Communicate → StatusPage + Slack         │          │
+│  │  6. Resolve → Confirm recovery               │          │
+│  │  7. Post-mortem → Within 48 hours            │          │
+│  └──────────────────────────────────────────────┘          │
 │                                                              │
-│  2. TRIAGE (within 5 minutes)                               │
-│     ├─ Acknowledge alert                                    │
-│     ├─ Assess severity (P1/P2/P3/P4)                       │
-│     ├─ Create incident channel (#incidents-YYYY-MM-DD-slug) │
-│     └─ Post initial assessment in channel                   │
-│                                                              │
-│  3. MITIGATE (within 15 minutes)                            │
-│     ├─ Identify root cause (or narrow scope)                │
-│     ├─ Apply immediate fix or workaround                    │
-│     ├─ If no quick fix → rollback last deployment           │
-│     └─ Verify mitigation is working                         │
-│                                                              │
-│  4. COMMUNICATE                                             │
-│     ├─ Update status page (P1/P2 only)                      │
-│     ├─ Notify stakeholders (P1 only)                        │
-│     └─ Post in #incidents channel                           │
-│                                                              │
-│  5. RESOLVE                                                  │
-│     ├─ Confirm service is fully restored                     │
-│     ├─ Close incident channel (keep for post-mortem)        │
-│     └─ Update status page to "All Systems Operational"      │
-│                                                              │
-│  6. POST-MORTEM (within 48 hours)                           │
-│     ├─ Write incident report                                │
-│     ├─ Identify root cause and contributing factors          │
-│     ├─ Define action items to prevent recurrence             │
-│     └─ Schedule review meeting                              │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Incident Channel Template
+**Step-by-step process:**
 
-```
-/incident create "Vibe Coder — [Brief Description]"
+1. **Detect & Acknowledge** (0–5 min)
+   - Acknowledge alert in PagerDuty
+   - Open `#incident-active` Slack channel
+   - Post: `🔴 INCIDENT: [Brief description] | Severity: P[X] | On-call: [Name] | Started: [Time]`
 
-Channel topic: [P1/P2] — [Service] — [Symptom] — Status: [Investigating/Mitigating/Resolved]
+2. **Triage & Assess** (5–15 min)
+   - Determine scope: How many users affected?
+   - Check if issue is isolated or system-wide
+   - Review recent deployments (last 2 hours)
+   - Check external service status pages
+   - Determine if mitigation is needed immediately
 
-Initial post:
-🚨 **Incident Report**
-- **Severity:** P1/P2/P3
-- **Status:** Investigating
-- **Started:** YYYY-MM-DD HH:MM UTC
-- **Impact:** [Description of user impact]
-- **Affected services:** [List]
-- **On-call:** @yourname
-- **Status page:** [link]
+3. **Mitigate** (15–60 min)
+   - Apply quick fix (rollback, scale up, feature flag)
+   - Verify mitigation working
+   - If unable to mitigate in target time → escalate
 
-Updates will be posted every [30min/1hr].
-```
+4. **Communicate**
+   - Update `#incident-active` with progress every 15 min
+   - Update StatusPage for P1 incidents
+   - Notify stakeholders for P1/P2
 
-### 3.3 Status Page Updates
+5. **Resolve & Confirm**
+   - Verify all metrics returned to normal
+   - Confirm users can access affected features
+   - Mark incident resolved in PagerDuty
+   - Post resolution summary
 
-**Investigating:**
-```
-We are investigating reports of [symptom]. Some users may experience [impact]. 
-We will provide an update in [30 minutes].
-```
-
-**Identified:**
-```
-We have identified the issue as [root cause]. [Service] is currently [status]. 
-We are working on a fix and will provide an update in [30 minutes].
-```
-
-**Monitoring:**
-```
-A fix has been deployed and we are monitoring the system. 
-[Service] appears to be recovering. We will confirm resolution shortly.
-```
-
-**Resolved:**
-```
-The issue has been resolved. [Service] is now operating normally. 
-We apologize for the inconvenience and will publish a post-mortem within 48 hours.
-```
+6. **Post-Mortem**
+   - Schedule within 48 hours
+   - Blameless, focus on systems not individuals
+   - Document root cause, timeline, action items
 
 ---
 
-## 4. Common Incidents & Runbooks
-
-### 4.1 API Service — High Error Rate (5xx)
+### 3.2 Analysis Pipeline Failures
 
 **Symptoms:**
-- CloudWatch alarm: `VibeCoder-HighErrorRate` fires
-- Users report "Something went wrong" errors
-- p99 latency spikes above 5 seconds
+- `AnalysisJobFailureRateHigh` alert fires
+- Users report "Analysis failed" or stuck at a stage
+- Worker logs show errors
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check ECS service health
-aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api \
-  --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount}'
+# 1. Check overall pipeline health
+aws cloudwatch get-metric-statistics \
+  --namespace "VibeCoder/Analysis" \
+  --metric-name "JobFailureRate" \
+  --period 300 \
+  --statistics Average \
+  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
 
-# 2. Check recent task failures
-aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api \
-  --query 'services[0].events[:10].{time:createdAt,message:message}'
+# 2. Check worker logs for recent failures
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/analysis-worker" \
+  --filter-pattern "ERROR" \
+  --start-time $(date -u -d '30 minutes ago' +%s000)
 
-# 3. Check ALB target health
-aws elbv2 describe-target-health \
-  --target-group-arn arn:aws:elasticloadbalancing:us-east-1:ACCOUNT:targetgroup/vibecoder-prod-api-tg/ID \
-  --query 'TargetHealthDescriptions[].{state:TargetHealth.State,reason:TargetHealth.Reason}'
+# 3. Check queue depth
+redis-cli LLEN analysis:jobs:pending
+redis-cli LLEN analysis:jobs:in_progress
 
-# 4. Check API logs for errors
-aws logs tail /ecs/vibecoder-production --since 15m --filter-pattern "ERROR" --format short
-
-# 5. Check database connectivity
-psql "$DATABASE_URL" -c "SELECT 1;" 2>&1
-
-# 6. Check Redis connectivity
-redis-cli -u "$REDIS_URL" PING 2>&1
+# 4. Check specific failed job
+# Get job ID from alert or user report
+curl -s "http://api.internal:8000/api/v1/admin/jobs/${JOB_ID}" | jq .
 ```
 
-**Common causes and fixes:**
+**Common Causes & Fixes:**
 
 | Cause | Symptoms | Fix |
 |---|---|---|
-| Database connection pool exhaustion | `timeout acquiring connection`, `ECONNREFUSED` | Restart API tasks, increase pool size, check for connection leaks |
-| Memory pressure | OOM kills in ECS events | Increase task memory, check for memory leaks |
-| Downstream service timeout | `ETIMEDOUT`, `ECONNRESET` | Check dependency health, implement circuit breaker |
-| Bad deployment | Errors correlate with deploy time | Rollback to previous task definition |
-| GitHub API rate limit | `403 rate limit exceeded`, GitHub-related endpoints failing | Wait for rate limit reset, switch to cached data |
+| GitHub clone failure | Jobs stuck at "cloning" stage | Check GitHub token validity, rate limits |
+| AST parser OOM | Workers killed, SIGTERM in logs | Restart worker, increase memory limit |
+| Invalid file encoding | Parse errors on specific files | Skip files with encoding errors (already handled) |
+| OpenAI API timeout | Jobs stuck at "generating" stage | Check OpenAI status, retry job |
+| Database connection exhausted | "too many connections" in logs | Restart PgBouncer, kill idle connections |
 
-**Immediate mitigation:**
-```bash
-# Rollback to previous task definition
-PREV_TASK_DEF=$(aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api \
-  --query 'services[0].taskDefinition' \
-  --output text | sed 's/:.*//')
-
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-api \
-  --task-definition $PREV_TASK_DEF
-
-# Wait for rollback
-aws ecs wait services-stable \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api
-```
+**Mitigation:**
+1. If specific repo causing issues → Cancel that job: `POST /api/v1/admin/jobs/{id}/cancel`
+2. If all workers stuck → Restart worker fleet: `aws ecs update-service --cluster vibecoder --service analysis-worker --force-new-deployment`
+3. If queue backed up → Scale workers: `aws ecs update-service --cluster vibecoder --service analysis-worker --desired-count 10`
 
 ---
 
-### 4.2 Database — Connection Failures
+### 3.3 API Latency Degradation
 
 **Symptoms:**
-- API returning 503 errors
-- `ECONNREFUSED` or `connection timeout` in logs
-- Application logs show `Prisma error: Can't reach database server`
+- `APILatencyP95High` alert fires
+- Users report slow page loads or timeouts
+- Dashboard shows elevated response times
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check RDS instance status
-aws rds describe-db-instances \
-  --db-instance-identifier vibecoder-production-postgres-0 \
-  --query 'DBInstances[0].{status:DBInstanceStatus,cpu:ProcessorFeatures,endpoints:Endpoint}'
+# 1. Identify which endpoints are slow
+# Check Grafana dashboard: API Latency by Endpoint
 
-# 2. Check CPU utilization
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name CPUUtilization \
-  --dimensions Name=DBInstanceIdentifier,Value=vibecoder-production-postgres-0 \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average
-
-# 3. Check connection count
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name DatabaseConnections \
-  --dimensions Name=DBInstanceIdentifier,Value=vibecoder-production-postgres-0 \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 60 \
-  --statistics Maximum
-
-# 4. Check for long-running queries
-psql "$DATABASE_URL" -c "
+# 2. Check database performance
+psql -h vibecoder-db.internal -U vibecoder -d vibecoder_prod -c "
   SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state
   FROM pg_stat_activity
   WHERE state != 'idle'
@@ -282,753 +198,658 @@ psql "$DATABASE_URL" -c "
   LIMIT 10;
 "
 
-# 5. Check for locks
-psql "$DATABASE_URL" -c "
-  SELECT blocked.pid AS blocked_pid,
-         blocked.query AS blocked_query,
-         blocking.pid AS blocking_pid,
-         blocking.query AS blocking_query
-  FROM pg_stat_activity AS blocked
-  JOIN pg_locks AS bl ON bl.pid = blocked.pid
-  JOIN pg_locks AS kl ON kl.locktype = bl.locktype
-    AND kl.relation = bl.relation
-    AND kl.pid != bl.pid
-  JOIN pg_stat_activity AS blocking ON blocking.pid = kl.pid
-  WHERE NOT bl.granted;
+# 3. Check for lock contention
+psql -c "
+  SELECT blocked_locks.pid AS blocked_pid,
+         blocking_locks.pid AS blocking_pid,
+         blocked_activity.query AS blocked_statement
+  FROM pg_catalog.pg_locks blocked_locks
+  JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_activity.pid = blocked_locks.pid
+  JOIN pg_catalog.pg_locks blocking_locks ON blocking_locks.locktype = blocked_locks.locktype
+  WHERE NOT blocked_locks.granted;
 "
+
+# 4. Check Redis cache hit rate
+redis-cli INFO stats | grep keyspace
+
+# 5. Check ECS service health
+aws ecs describe-services --cluster vibecoder --services api-server
 ```
 
-**Common causes and fixes:**
+**Common Causes & Fixes:**
 
 | Cause | Symptoms | Fix |
 |---|---|---|
-| Connection pool exhaustion | All connections in use, new connections timeout | Kill idle connections, increase `max_connections`, check for leaked connections |
-| Long-running query | High CPU, connections blocked | Kill the offending query (`SELECT pg_terminate_backend(pid)`), add missing index |
-| RDS failover | Brief connectivity loss during Multi-AZ failover | Wait 30s for automatic recovery, verify application reconnects |
-| Security group misconfiguration | `ECONNREFUSED` from new service | Verify ECS security group has access to RDS port 5432 |
+| Slow database queries | High DB CPU, connection pool saturation | Add missing indexes, optimize queries |
+| Redis cache misses | High Redis miss rate | Verify cache keys, warm cache |
+| Connection pool exhaustion | "timeout acquiring connection" | Increase pool size, check for leaks |
+| CPU saturation | ECS CPU > 80% | Scale out API servers |
+| External service slow | High latency in downstream calls | Add circuit breakers, timeouts |
 
-**Immediate mitigation:**
-```bash
-# Kill long-running queries (> 5 minutes)
-psql "$DATABASE_URL" -c "
-  SELECT pg_terminate_backend(pid)
-  FROM pg_stat_activity
-  WHERE state != 'idle'
-    AND query_start < now() - interval '5 minutes'
-    AND pid != pg_backend_pid();
-"
-
-# Restart API services to reset connection pools
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-api \
-  --force-new-deployment
-```
+**Mitigation:**
+1. Scale API servers: `aws ecs update-service --cluster vibecoder --service api-server --desired-count [new_count]`
+2. Enable query-level caching in Redis for slow endpoints
+3. Add read replicas if DB is bottleneck: `aws rds create-db-instance-read-replica`
 
 ---
 
-### 4.3 Redis — Memory or Connection Issues
+### 3.4 Retrieval Engine Issues
 
 **Symptoms:**
-- `OOM command not allowed` errors in application logs
-- Session/refresh token operations failing
-- WebSocket connections dropping
+- `RetrievalLatencyHigh` or `RetrievalPrecisionLow` alerts
+- Chat responses are generic/unrelated to code
+- "No relevant code found" when code exists
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check Redis memory usage
-redis-cli -u "$REDIS_URL" INFO memory | grep used_memory_human
+# 1. Check Elasticsearch health
+curl -s "http://elasticsearch.internal:9200/_cluster/health?pretty"
 
-# 2. Check connected clients
-redis-cli -u "$REDIS_URL" INFO clients | grep connected_clients
+# 2. Check index stats
+curl -s "http://elasticsearch.internal:9200/code_chunks/_stats?pretty" | jq .indices.code_chunks.primaries.search
 
-# 3. Check for slow commands
-redis-cli -u "$REDIS_URL" SLOWLOG GET 10
+# 3. Check Pinecone index stats
+curl -s "https://controller.${PINECONE_ENV}.pinecone.io/describe_index_stats" \
+  -H "Api-Key: ${PINECONE_API_KEY}"
 
-# 4. Check eviction policy
-redis-cli -u "$REDIS_URL" CONFIG GET maxmemory-policy
+# 4. Test retrieval directly
+curl -s -X POST "http://retrieval-engine.internal:8001/search" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "authentication middleware", "repo_id": "test-repo-id", "top_k": 10}'
 
-# 5. Check ElastiCache metrics
+# 5. Check embedding generation
+curl -s "http://retrieval-engine.internal:8001/health" | jq .
+```
+
+**Common Causes & Fixes:**
+
+| Cause | Symptoms | Fix |
+|---|---|---|
+| Stale index | Results from old code version | Re-index after re-analysis |
+| Index corruption | Empty or garbled results | Rebuild index from scratch |
+| Embedding model mismatch | Poor semantic matching | Ensure consistent embedding model |
+| Elasticsearch memory pressure | Slow queries, circuit breaker trips | Increase JVM heap, add data nodes |
+| Pinecone quota exceeded | Vector search failures | Upgrade plan or reduce index size |
+
+**Mitigation:**
+1. Re-index specific repo: `curl -X POST /api/v1/admin/repos/{id}/reindex`
+2. Scale Elasticsearch: `curl -X PUT /_cluster/settings -d '{"transient":{"cluster.routing.allocation.enable":"all"}}'`
+3. If Pinecone down → Fall back to Elasticsearch-only mode (feature flag: `RETRIEVAL_FALLBACK_MODE=true`)
+
+---
+
+### 3.5 LLM Generation Issues
+
+**Symptoms:**
+- `LLMGenerationLatencyHigh` or `OpenAIErrorRateHigh` alerts
+- Chat responses are empty or malformed
+- Citation counts drop significantly
+
+**Investigation:**
+
+```bash
+# 1. Check OpenAI API status
+curl -s "https://status.openai.com/api/v2/status.json"
+
+# 2. Check token usage and costs
 aws cloudwatch get-metric-statistics \
-  --namespace AWS/ElastiCache \
-  --metric-name DatabaseMemoryUsagePercentage \
-  --dimensions Name=CacheClusterId,Value=vibecoder-production-redis-001 \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average Maximum
+  --namespace "VibeCoder/LLM" \
+  --metric-name "TokensUsed" \
+  --period 3600 \
+  --statistics Sum \
+  --start-time $(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
+
+# 3. Check generation service logs
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/generation-service" \
+  --filter-pattern "ERROR OR timeout OR rate_limit" \
+  --start-time $(date -u -d '15 minutes ago' +%s000)
+
+# 4. Check current API key quota
+# Verify in Stripe dashboard or OpenAI dashboard
+
+# 5. Test generation directly
+curl -s -X POST "http://generation.internal:8002/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "test", "context": [], "mode": "chat"}'
 ```
 
-**Common causes and fixes:**
+**Common Causes & Fixes:**
 
 | Cause | Symptoms | Fix |
 |---|---|---|
-| Memory exhaustion | `OOM` errors, evictions increasing | Flush expired keys, increase `maxmemory`, scale to larger node type |
-| Too many connections | `max clients reached` | Increase `maxclients`, check for connection leaks in application |
-| Slow commands | High latency, CPU spikes | Identify slow commands via SLOWLOG, optimize or remove |
-| Network partition | Intermittent connection failures | Check VPC peering, security groups, NAT gateway |
+| OpenAI rate limit hit | 429 errors in logs | Switch to backup model, queue requests |
+| OpenAI quota exceeded | 429 with "insufficient_quota" | Update billing, or use fallback provider |
+| Context too large | Generation timeout or error | Reduce context window, improve retrieval precision |
+| Prompt injection attempts | Unexpected model behavior | Strengthen input sanitization |
+| Model deprecation | Unexpected errors | Update model version in config |
 
-**Immediate mitigation:**
-```bash
-# Flush expired keys (safe operation)
-redis-cli -u "$REDIS_URL" --scan --pattern "session:*" --count 100 | xargs -L 1 redis-cli -u "$REDIS_URL" DEL
-
-# Check and flush stale refresh tokens
-redis-cli -u "$REDIS_URL" --scan --pattern "refresh:*" --count 100 | head -20
-```
+**Mitigation:**
+1. Enable fallback model: Set `LLM_FALLBACK_MODEL=gpt-3.5-turbo-16k` in environment
+2. Reduce concurrent generations: Set `LLM_MAX_CONCURRENT=5`
+3. If OpenAI fully down → Switch to Anthropic: `LLM_PROVIDER=anthropic`
 
 ---
 
-### 4.4 Analysis Pipeline — Job Failures
+### 3.6 WebSocket / Chat Issues
 
 **Symptoms:**
-- Analysis jobs stuck in `cloning`, `parsing`, or `indexing` status
-- Users report "Analysis failed" notifications
-- Worker pool queue depth increasing
+- `WebSocketConnectionFailure` alert
+- Users report chat messages not sending or receiving
+- Streaming responses stuck or dropped
 
-**Diagnosis:**
-
-```bash
-# 1. Check worker pool status
-aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-worker \
-  --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount}'
-
-# 2. Check recent failed jobs
-psql "$DATABASE_URL" -c "
-  SELECT id, repo_id, status, error_message, created_at
-  FROM analysis_jobs
-  WHERE status = 'failed'
-    AND created_at > now() - interval '1 hour'
-  ORDER BY created_at DESC
-  LIMIT 10;
-"
-
-# 3. Check jobs stuck in progress
-psql "$DATABASE_URL" -c "
-  SELECT id, repo_id, status, started_at,
-         now() - started_at AS elapsed
-  FROM analysis_jobs
-  WHERE status IN ('cloning', 'parsing', 'indexing', 'generating')
-    AND started_at < now() - interval '30 minutes'
-  ORDER BY started_at;
-"
-
-# 4. Check BullMQ queues (via Redis)
-redis-cli -u "$REDIS_URL" LLEN "bull:analysis:waiting"
-redis-cli -u "$REDIS_URL" LLEN "bull:analysis:active"
-redis-cli -u "$REDIS_URL" LLEN "bull:analysis:failed"
-
-# 5. Check worker logs
-aws logs tail /ecs/vibecoder-production --since 30m --filter-pattern "worker" --format short | tail -50
-```
-
-**Common causes and fixes:**
-
-| Cause | Symptoms | Fix |
-|---|---|---|
-| GitHub clone failure | Jobs stuck in `cloning` | Check GitHub token validity, verify repo access, check GitHub API status |
-| AST parser crash | Jobs stuck in `parsing` | Restart parser service, check for unsupported file types |
-| Embedding API rate limit | Jobs stuck in `indexing` | Check OpenAI rate limits, implement backoff, reduce parallelism |
-| LLM API timeout | Jobs stuck in `generating` | Check OpenAI status, increase timeout, switch to fallback model |
-| Queue backlog | `waiting` count high | Scale up worker replicas, check for stuck jobs |
-
-**Immediate mitigation:**
-```bash
-# Reset stuck jobs (older than 30 minutes)
-psql "$DATABASE_URL" -c "
-  UPDATE analysis_jobs
-  SET status = 'queued', worker_id = NULL, started_at = NULL
-  WHERE status IN ('cloning', 'parsing', 'indexing', 'generating')
-    AND started_at < now() - interval '30 minutes';
-"
-
-# Scale up workers
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-worker \
-  --desired-count 10
-
-# Clear failed job queue
-redis-cli -u "$REDIS_URL" DEL "bull:analysis:failed"
-```
-
----
-
-### 4.5 WebSocket — Connection Drops
-
-**Symptoms:**
-- Users report chat sessions disconnecting
-- Mock interview sessions losing connection
-- WebSocket connection count dropping in CloudWatch
-
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check WebSocket service health
-aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-websocket \
-  --query 'services[0].{status:status,runningCount:runningCount}'
+# 1. Check WebSocket server health
+curl -s "http://websocket.internal:8080/health"
 
-# 2. Check ALB target health for WebSocket
+# 2. Check active connections
+redis-cli GET "ws:connections:count"
+
+# 3. Check Redis pub/sub health
+redis-cli PUBSUB NUMSUB ws:broadcast
+
+# 4. Check ALB target health for WebSocket service
 aws elbv2 describe-target-health \
-  --target-group-arn arn:aws:elasticloadbalancing:us-east-1:ACCOUNT:targetgroup/vibecoder-prod-ws-tg/ID \
-  --query 'TargetHealthDescriptions[].{state:TargetHealth.State}'
+  --target-group-arn ${WS_TARGET_GROUP_ARN}
 
-# 3. Check active WebSocket connections
-curl -s https://api.vibecoder.com/health | jq '.websocketConnections'
-
-# 4. Check Redis pub/sub health (for multi-server WebSocket)
-redis-cli -u "$REDIS_URL" PUBSUB NUMSUB chat:notifications
-
-# 5. Check for SSL/TLS issues
-openssl s_client -connect api.vibecoder.com:443 -brief 2>&1 | head -5
+# 5. Check WebSocket server logs
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/websocket-server" \
+  --filter-pattern "ERROR OR disconnect OR timeout" \
+  --start-time $(date -u -d '15 minutes ago' +%s000)
 ```
 
-**Common causes and fixes:**
+**Common Causes & Fixes:**
 
 | Cause | Symptoms | Fix |
 |---|---|---|
-| ALB idle timeout | Connections drop after 60s of inactivity | Increase ALB idle timeout to 4000s, implement ping/pong |
-| Server restart | All connections drop simultaneously | Verify rolling deployment, check task health |
-| Redis pub/sub failure | Multi-server messages not delivered | Check Redis connectivity, verify adapter config |
-| Memory pressure | Connections dropped under load | Increase task memory, scale WebSocket replicas |
+| Redis pub/sub failure | Messages not broadcast | Check Redis health, restart if needed |
+| Sticky session misconfiguration | Connections dropped on reconnect | Verify ALB stickiness settings |
+| Memory leak in WS server | Gradual connection degradation | Restart affected instances |
+| ALB idle timeout | Connections killed after inactivity | Increase ALB timeout to 3600s |
+| Network partition | Partial message delivery | Check security groups, NACLs |
 
-**Immediate mitigation:**
-```bash
-# Force redeployment with rolling update
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-websocket \
-  --force-new-deployment \
-  --deployment-configuration "minimumHealthyPercent=50,maxPercent=200"
-
-# Check and increase ALB idle timeout
-aws elbv2 modify-load-balancer-attributes \
-  --load-balancer-arn arn:aws:elasticloadbalancing:us-east-1:ACCOUNT:loadbalancer/app/vibecoder-prod/ID \
-  --attributes Key=idle_timeout.timeout_seconds,Value=4000
-```
+**Mitigation:**
+1. Restart WebSocket servers: `aws ecs update-service --cluster vibecoder --service websocket-server --force-new-deployment`
+2. Clear stale connections: `redis-cli DEL "ws:connections:*"`
+3. Scale WebSocket servers: Increase desired count
 
 ---
 
-### 4.6 Retrieval Engine — Quality Degradation
+### 3.7 Database Issues
 
 **Symptoms:**
-- Evaluation benchmark scores dropping
-- Users report "answers seem off" or "citations are wrong"
-- Retrieval precision@3 dropping below 0.85
+- `DatabaseConnectionPoolExhausted` or `DatabaseReplicationLag` alerts
+- All API requests timing out
+- "FATAL: too many connections" in logs
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Run spot-check evaluation
-python eval/run_benchmark.py \
-  --benchmark eval/benchmarks/ret_bench_v1.json \
-  --config eval/configs/quick.yaml \
-  --output eval/results/spot-check/
+# 1. Check connection count
+psql -c "SELECT count(*) FROM pg_stat_activity;"
 
-# 2. Check Pinecone index stats
-curl -s "https://controller.${PINECONE_ENV}.pinecone.io/databases/${PINCEONE_INDEX}/stats" \
-  -H "Api-Key: ${PINECONE_API_KEY}" | jq '.dimension, .totalVectorCount'
+# 2. Check connection by state
+psql -c "
+  SELECT state, count(*)
+  FROM pg_stat_activity
+  GROUP BY state;
+"
 
-# 3. Check OpenSearch index health
-curl -s "https://${OPENSEARCH_ENDPOINT}/_cluster/health" | jq '.status, .number_of_nodes'
+# 3. Check long-running queries
+psql -c "
+  SELECT pid, now() - pg_stat_activity.query_start AS duration, query
+  FROM pg_stat_activity
+  WHERE state = 'active' AND now() - pg_stat_activity.query_start > interval '5 minutes';
+"
 
-# 4. Check embedding model availability
-curl -s "https://api.openai.com/v1/models" \
-  -H "Authorization: Bearer ${OPENAI_API_KEY}" | jq '.data[] | select(.id | contains("embedding"))'
+# 4. Check replication lag (if using read replicas)
+aws rds describe-db-instances \
+  --db-instance-identifier vibecoder-replica-1 \
+  --query 'DBInstances[0].StatusInfos'
 
-# 5. Check recent retrieval latency
+# 5. Check disk usage
+psql -c "SELECT pg_database_size('vibecoder_prod');"
+```
+
+**Common Causes & Fixes:**
+
+| Cause | Symptoms | Fix |
+|---|---|---|
+| Connection leak | Connections grow unbounded | Identify leaking service, restart it |
+| Long-running queries | Many active queries, locks | Kill queries, add indexes |
+| Replication lag | Read-after-write inconsistency | Check replica load, optimize heavy writes |
+| Disk space full | Writes failing | Archive old data, expand storage |
+| Lock contention | Deadlocks, timeouts | Optimize transaction scope, retry logic |
+
+**Mitigation:**
+1. Kill long queries: `SELECT pg_terminate_backend(${PID});`
+2. Restart PgBouncer: `systemctl restart pgbouncer` or restart ECS task
+3. Scale up RDS: `aws rds modify-db-instance --db-instance-identifier vibecoder-db --db-instance-class db.r6g.xlarge`
+4. Emergency: Switch all traffic to primary (disable read replicas): Set `DB_READ_REPLICAS_ENABLED=false`
+
+---
+
+### 3.8 GitHub API Issues
+
+**Symptoms:**
+- `GitHubAPIRateLimitExceeded` alert
+- New repos cannot be connected
+- Analysis jobs stuck at "cloning" stage
+
+**Investigation:**
+
+```bash
+# 1. Check current rate limit status
+curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+  "https://api.github.com/rate_limit" | jq .rate
+
+# 2. Check token pool health
+redis-cli SMEMBERS github:tokens:available | wc -l
+redis-cli SMEMBERS github:tokens:exhausted | wc -l
+
+# 3. Check recent API errors
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/repo-service" \
+  --filter-pattern "403 OR rate_limit OR secondary_rate" \
+  --start-time $(date -u -d '1 hour ago' +%s000)
+
+# 4. Check for stuck clone operations
+psql -c "SELECT id, status, created_at FROM analysis_jobs WHERE status = 'cloning' AND created_at < now() - interval '30 minutes';"
+```
+
+**Common Causes & Fixes:**
+
+| Cause | Symptoms | Fix |
+|---|---|---|
+| Token rate limit hit | 403 from GitHub API | Rotate to next token in pool |
+| Token revoked | 401 from GitHub API | Remove from pool, prompt user re-auth |
+| Large repo clone slow | Jobs stuck at cloning | Increase clone timeout, use shallow clone |
+| GitHub API outage | All GitHub calls failing | Queue jobs, retry when API recovers |
+
+**Mitigation:**
+1. Manually rotate tokens: `redis-cli SMOVE github:tokens:exhausted github:tokens:available ${TOKEN_HASH}`
+2. Reduce analysis concurrency: Set `ANALYSIS_MAX_CONCURRENT=3`
+3. Enable shallow clones: Set `GIT_SHALLOW_CLONE=true`
+
+---
+
+### 3.9 OpenAI Quota / Billing Issues
+
+**Symptoms:**
+- `OpenAIQuotaExceeded` alert
+- All LLM generation failing
+- "insufficient_quota" errors in logs
+
+**Investigation:**
+
+```bash
+# 1. Check current usage in OpenAI dashboard
+# Navigate to: https://platform.openai.com/usage
+
+# 2. Check billing status
+# Navigate to: https://platform.openai.com/settings/organization/billing
+
+# 3. Check token consumption trends
 aws cloudwatch get-metric-statistics \
-  --namespace VibeCoder \
-  --metric-name RetrievalLatency \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --namespace "VibeCoder/LLM" \
+  --metric-name "TokensUsed" \
+  --period 86400 \
+  --statistics Sum \
+  --start-time $(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
+
+# 4. Check which models are being used
+grep -o '"model":"[^"]*"' /var/log/generation-service/*.log | sort | uniq -c
+```
+
+**Mitigation:**
+1. **Immediate:** Switch to cheaper model: `LLM_MODEL=gpt-3.5-turbo-16k`
+2. **Immediate:** Enable cost guardrails: Set `LLM_MAX_TOKENS_PER_REQUEST=2000`
+3. **Short-term:** Add OpenAI credits or upgrade billing tier
+4. **Long-term:** Evaluate alternative providers (Anthropic, Cohere, self-hosted)
+
+---
+
+### 3.10 Disk Space Issues
+
+**Symptoms:**
+- `DiskSpaceLow` alert (ECS instances or S3)
+- Repo clone failures
+- Artifact storage failures
+
+**Investigation:**
+
+```bash
+# 1. Check disk usage on ECS instances
+# (via SSM or SSH to bastion)
+df -h /data
+
+# 2. Check S3 bucket usage
+aws s3 ls s3://vibecoder-repo-clones --recursive --summarize | tail -2
+
+# 3. Find largest files
+find /data/repos -type f -size +100M -exec ls -lh {} \; | sort -k5 -h
+
+# 4. Check old clones
+find /data/repos -type d -maxdepth 1 -mtime +1 -exec du -sh {} \;
+```
+
+**Mitigation:**
+1. **Immediate:** Delete old repo clones: `find /data/repos -type d -maxdepth 1 -mtime +1 -exec rm -rf {} \;`
+2. **Immediate:** Clean up failed analysis artifacts
+3. **Short-term:** Implement S3 lifecycle policy (auto-delete after 7 days)
+4. **Long-term:** Move repo clones to ephemeral S3 storage instead of local disk
+
+---
+
+### 3.11 Memory Issues
+
+**Symptoms:**
+- `MemoryUsageCritical` alert
+- Container OOM kills
+- Gradual performance degradation
+
+**Investigation:**
+
+```bash
+# 1. Check ECS task memory usage
+aws cloudwatch get-metric-statistics \
+  --namespace "ECS/ContainerInsights" \
+  --metric-name "MemoryUtilized" \
+  --dimensions Name=ServiceName,Value=analysis-worker \
   --period 300 \
-  --statistics p50 p95 p99
+  --statistics Average Maximum \
+  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
+
+# 2. Check for OOM kills
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/analysis-worker" \
+  --filter-pattern "OutOfMemory" \
+  --start-time $(date -u -d '24 hours ago' +%s000)
+
+# 3. Profile memory usage (if accessible)
+# Connect to container and run heapdump
 ```
 
-**Common causes and fixes:**
+**Common Causes:**
+- Memory leak in worker processes
+- Large repo AST in memory
+- Unbounded caching
+- Connection pool leak
 
-| Cause | Symptoms | Fix |
-|---|---|---|
-| Embedding model changed | Sudden quality drop across all queries | Verify embedding model version, re-embed if needed |
-| Index corruption | Specific queries failing | Rebuild affected index segments |
-| RRF parameter drift | Ranking quality degraded | Check RRF k-value, revert to last known-good config |
-| New code not indexed | Recent changes not reflected | Trigger re-analysis of affected repositories |
-
-**Immediate mitigation:**
-```bash
-# Re-run evaluation with previous config
-python eval/run_benchmark.py \
-  --benchmark eval/benchmarks/ret_bench_v1.json \
-  --config eval/configs/previous.yaml \
-  --output eval/results/comparison/
-
-# If comparison shows regression, roll back retrieval config
-git checkout HEAD~1 -- packages/retrieval/config/
-pnpm run build --filter=@vibe-coder/retrieval
-# Deploy updated retrieval service
-```
+**Mitigation:**
+1. Restart affected service: `aws ecs update-service --cluster vibecoder --service ${SERVICE} --force-new-deployment`
+2. Increase memory limit: Update task definition with higher `memory` value
+3. If persistent → Enable memory profiling, identify leak source
 
 ---
 
-### 4.7 Cost Anomaly — Unexpected API Spend
+### 3.12 Error Rate Spike
 
 **Symptoms:**
-- Daily OpenAI API cost exceeds $300 alert fires
-- Token consumption rate higher than expected
-- LLM costs growing faster than user growth
+- `ErrorRateSpike` alert
+- 5xx errors in API logs
+- User-reported errors
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check OpenAI usage dashboard
-# Visit: https://platform.openai.com/usage
+# 1. Check error rate by service
+aws cloudwatch get-metric-statistics \
+  --namespace "VibeCoder/API" \
+  --metric-name "5xxErrorRate" \
+  --period 300 \
+  --statistics Average \
+  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
 
-# 2. Check token consumption by service
-psql "$DATABASE_URL" -c "
-  SELECT
-    DATE(created_at) as day,
-    model_used,
-    SUM(tokens_used) as total_tokens,
-    COUNT(*) as message_count
-  FROM chat_messages
-  WHERE created_at > now() - interval '7 days'
-    AND role = 'assistant'
-  GROUP BY DATE(created_at), model_used
-  ORDER BY day DESC, total_tokens DESC;
-"
+# 2. Check recent deployments
+aws ecs describe-services --cluster vibecoder --services api-server \
+  --query 'services[0].deployments'
 
-# 3. Check for excessive retrieval chunking
-psql "$DATABASE_URL" -c "
-  SELECT
-    repo_id,
-    COUNT(*) as chunk_count,
-    AVG(token_count) as avg_tokens_per_chunk,
-    SUM(token_count) as total_tokens
-  FROM code_chunks
-  GROUP BY repo_id
-  ORDER BY total_tokens DESC
-  LIMIT 10;
-"
+# 3. Check error logs
+aws logs filter-log-events \
+  --log-group-name "/aws/ecs/api-server" \
+  --filter-pattern "ERROR" \
+  --start-time $(date -u -d '30 minutes ago' +%s000) \
+  --max-results 20
 
-# 4. Check for retry storms
-aws logs tail /ecs/vibecoder-production --since 1h \
-  --filter-pattern "retry" --format short | wc -l
-
-# 5. Check worker queue depth
-redis-cli -u "$REDIS_URL" LLEN "bull:analysis:waiting"
+# 4. Check if correlated with deployment
+# Compare error rate spike time with deployment completion time
 ```
 
-**Common causes and fixes:**
+**Common Causes:**
+- Bad deployment (introduced bug)
+- External service outage
+- Configuration change
+- Traffic spike overwhelming capacity
 
-| Cause | Symptoms | Fix |
-|---|---|---|
-| Retry storm | Exponential token growth | Check retry configuration, implement circuit breaker |
-| Chunks too large | High tokens per query | Reduce chunk size, implement token budget |
-| Wrong model used | Using GPT-4 for classification | Check model routing, use GPT-4o-mini for simple tasks |
-| Cache misses | Re-embedding same queries | Check embedding cache hit rate, increase TTL |
-
-**Immediate mitigation:**
-```bash
-# Temporarily reduce analysis parallelism
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-worker \
-  --desired-count 2
-
-# Switch to cheaper model for non-critical paths
-# Update environment variable:
-aws ssm put-parameter \
-  --name /vibecoder/production/LLM_MODEL_ROUTING \
-  --value '{"classification":"gpt-4o-mini","chat":"gpt-4o","analysis":"gpt-4o"}' \
-  --type String \
-  --overwrite
-```
+**Mitigation:**
+1. **If recent deployment:** Roll back immediately:
+   ```bash
+   aws ecs update-service --cluster vibecoder --service api-server \
+     --task-definition vibecoder-api:PREVIOUS_REVISION
+   ```
+2. **If external service:** Enable circuit breaker, switch to degraded mode
+3. **If traffic spike:** Scale up: `aws ecs update-service --cluster vibecoder --service api-server --desired-count [higher]`
 
 ---
 
-### 4.8 Security — Suspicious Activity
+### 3.13 Payment Processing Issues
 
 **Symptoms:**
-- Unusual login patterns (many failed attempts)
-- API key leaked in public repository
-- Unauthorized access to user data
-- Unexpected GitHub API usage
+- `PaymentProcessingFailure` alert
+- Users unable to upgrade
+- Webhook delivery failures
 
-**Diagnosis:**
+**Investigation:**
 
 ```bash
-# 1. Check for failed login attempts
-psql "$DATABASE_URL" -c "
-  SELECT ip_address, COUNT(*) as attempts,
-         MAX(created_at) as last_attempt
-  FROM usage_events
-  WHERE event_type = 'login_failed'
-    AND created_at > now() - interval '1 hour'
-  GROUP BY ip_address
-  HAVING COUNT(*) > 5
-  ORDER BY attempts DESC;
-"
+# 1. Check Stripe webhook delivery
+curl -s "https://api.stripe.com/v1/events?type=checkout.session.completed&limit=5" \
+  -u "${STRIPE_SECRET_KEY}:"
 
-# 2. Check for suspicious API usage
-psql "$DATABASE_URL" -c "
-  SELECT user_id, COUNT(*) as request_count,
-         COUNT(DISTINCT ip_address) as unique_ips
-  FROM usage_events
-  WHERE created_at > now() - interval '1 hour'
-  GROUP BY user_id
-  HAVING COUNT(*) > 100
-  ORDER BY request_count DESC;
-"
+# 2. Check webhook endpoint health
+curl -s "http://api.internal:8000/api/v1/billing/health"
 
-# 3. Check for token reuse across IPs
-psql "$DATABASE_URL" -c "
-  SELECT DISTINCT
-    cm.session_id,
-    cs.user_id,
-    ue.ip_address,
-    cm.created_at
-  FROM chat_messages cm
-  JOIN chat_sessions cs ON cs.id = cm.session_id
-  JOIN usage_events ue ON ue.user_id = cs.user_id
-  WHERE cm.created_at > now() - interval '1 hour'
-    AND ue.event_type = 'chat_message'
-  ORDER BY cm.created_at DESC
-  LIMIT 20;
-"
+# 3. Check failed webhook events
+curl -s "https://api.stripe.com/v1/events?delivery_status=failed&limit=10" \
+  -u "${STRIPE_SECRET_KEY}:"
 
-# 4. Check GitHub token scope
-curl -s -H "Authorization: token $GITHUB_TOKEN" \
-  https://api.github.com/user | jq '.plan, .permissions'
+# 4. Verify Stripe status
+curl -s "https://status.stripe.com/api/v2/summary.json"
 ```
 
-**Immediate response:**
+**Mitigation:**
+1. **Immediate:** Manually verify pending payments in Stripe dashboard
+2. **Short-term:** Retry failed webhooks: `POST /api/v1/billing/webhooks/retry`
+3. **Long-term:** Implement idempotent webhook handling, add dead letter queue
+
+---
+
+## 4. Deployment & Rollback Procedures
+
+### 4.1 Standard Deployment
 
 ```bash
-# If API key leaked:
-# 1. Revoke the compromised key immediately
-# 2. Rotate to new key
-# 3. Update Secrets Manager
-aws secretsmanager update-secret \
-  --secret-id vibecoder/production/openai \
-  --secret-string '{"openai_api_key": "NEW_KEY_HERE"}'
+# 1. Deploy to staging
+git push origin develop
+# GitHub Actions runs CI → auto-deploys to staging
 
-# If suspicious user activity:
-# 1. Disable the user account
-psql "$DATABASE_URL" -c "UPDATE users SET plan_tier = 'disabled' WHERE id = 'SUSPICIOUS_USER_ID';"
+# 2. Verify staging
+# Run smoke tests: curl -s https://staging.vibecoder.com/api/v1/health
 
-# 2. Invalidate all their sessions
-psql "$DATABASE_URL" -c "DELETE FROM chat_sessions WHERE user_id = 'SUSPICIOUS_USER_ID';"
+# 3. Deploy to production (manual trigger)
+# GitHub Actions: Actions → Deploy Production → Run workflow
 
-# 3. Block the IP at ALB level
-aws wafv2 update-web-acl \
-  --name vibecoder-production-waf \
-  --scope REGIONAL \
-  --default-action Allow={} \
-  --rules '[{
-    "Name": "BlockSuspiciousIP",
-    "Priority": 1,
-    "Action": {"Block": {}},
-    "Statement": {"IPSetReferenceStatement": {"ARN": "arn:aws:wafv2:..."}},
-    "VisibilityConfig": {"SampledRequestsEnabled": true}
-  }]'
+# 4. Post-deploy verification
+curl -s https://api.vibecoder.com/api/v1/health | jq .
+# Verify: {"status":"healthy","version":"x.y.z","services":{...}}
+```
+
+### 4.2 Emergency Rollback
+
+```bash
+# 1. Identify last known good version
+aws ecs describe-task-definition --task-definition vibecoder-api:PREVIOUS_REVISION
+
+# 2. Rollback immediately
+aws ecs update-service \
+  --cluster vibecoder \
+  --service api-server \
+  --task-definition vibecoder-api:PREVIOUS_REVISION \
+  --force-new-deployment
+
+# 3. Verify rollback
+aws ecs describe-services --cluster vibecoder --services api-server \
+  --query 'services[0].deployments'
+
+# 4. Communicate
+# Post in #incident-active: "Emergency rollback completed to version X.Y.Z"
+```
+
+### 4.3 Database Migration Rollback
+
+```bash
+# ⚠️ DANGER: Only if migration is reversible
+
+# 1. Check migration status
+psql -c "SELECT * FROM schema_migrations ORDER BY version DESC LIMIT 5;"
+
+# 2. Rollback last migration
+npx prisma migrate resolve --rolled-back ${MIGRATION_NAME}
+
+# 3. If migration caused data loss → restore from backup
+aws rds restore-db-instance-to-point-in-time \
+  --source-db-instance-identifier vibecoder-db \
+  --target-db-instance-identifier vibecoder-db-restore \
+  --restore-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S)
 ```
 
 ---
 
-## 5. Deployment Procedures
+## 5. Monitoring & Alerting Configuration
 
-### 5.1 Standard Deployment
-
-```bash
-# 1. Verify CI passes
-gh run list --branch main --limit 5
-
-# 2. Pull latest
-git pull origin main
-
-# 3. Run local tests
-pnpm test
-
-# 4. Build Docker images
-docker build -t vibecoder/api:latest -f apps/api/Dockerfile .
-docker build -t vibecoder/websocket:latest -f apps/websocket/Dockerfile .
-docker build -t vibecoder/worker:latest -f apps/worker/Dockerfile .
-
-# 5. Push to ECR
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
-
-docker push ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vibecoder/api:latest
-docker push ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vibecoder/websocket:latest
-docker push ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vibecoder/worker:latest
-
-# 6. Run database migrations
-docker run --rm \
-  -e DATABASE_URL=$DATABASE_URL \
-  ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vibecoder/worker:latest \
-  npx prisma migrate deploy
-
-# 7. Update services (rolling deployment)
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-api \
-  --force-new-deployment
-
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-websocket \
-  --force-new-deployment
-
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-worker \
-  --force-new-deployment
-
-# 8. Wait for stability
-aws ecs wait services-stable \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api vibecoder-production-websocket vibecoder-production-worker
-
-# 9. Verify health
-curl -sf https://api.vibecoder.com/health | jq .
-
-# 10. Run smoke tests
-pnpm run test:smoke
-```
-
-### 5.2 Emergency Rollback
-
-```bash
-# 1. Identify current and previous task definitions
-CURRENT=$(aws ecs describe-services \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api \
-  --query 'services[0].taskDefinition' --output text)
-
-PREV=$(aws ecs list-task-definitions \
-  --family-prefix vibecoder-production-api \
-  --sort DESC \
-  --query 'taskDefinitionArns[1]' --output text)
-
-echo "Rolling back: $CURRENT → $PREV"
-
-# 2. Rollback API
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-api \
-  --task-definition $PREV
-
-# 3. Rollback WebSocket
-PREV_WS=$(aws ecs list-task-definitions \
-  --family-prefix vibecoder-production-websocket \
-  --sort DESC \
-  --query 'taskDefinitionArns[1]' --output text)
-
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-websocket \
-  --task-definition $PREV_WS
-
-# 4. Rollback Workers
-PREV_WORKER=$(aws ecs list-task-definitions \
-  --family-prefix vibecoder-production-worker \
-  --sort DESC \
-  --query 'taskDefinitionArns[1]' --output text)
-
-aws ecs update-service \
-  --cluster vibecoder-production-cluster \
-  --service vibecoder-production-worker \
-  --task-definition $PREV_WORKER
-
-# 5. Wait for rollback to complete
-aws ecs wait services-stable \
-  --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api vibecoder-production-websocket vibecoder-production-worker
-
-# 6. Verify rollback
-curl -sf https://api.vibecoder.com/health | jq .
-```
-
-### 5.3 Database Rollback
-
-```bash
-# ⚠️ DANGER: Only use for schema migrations that caused data issues
-
-# 1. Identify the problematic migration
-psql "$DATABASE_URL" -c "SELECT * FROM _prisma_migrations ORDER BY finished_at DESC LIMIT 5;"
-
-# 2. If safe to revert (no data loss):
-pnpm prisma migrate dev --create-only --name revert-descriptive-name
-
-# 3. If migration corrupted data, restore from snapshot:
-aws rds describe-db-cluster-snapshots \
-  --db-cluster-identifier vibecoder-production-postgres \
-  --query 'DBClusterSnapshots[:5].{id:DBClusterSnapshotIdentifier,created:SnapshotCreateTime}'
-
-aws rds restore-db-cluster-from-snapshot \
-  --db-cluster-identifier vibecoder-production-postgres-rollback \
-  --snapshot-identifier <SNAPSHOT_ID>
-
-# 4. Update application to point to rollback cluster
-# 5. Verify data integrity
-# 6. Swap DNS to rollback cluster
-```
-
----
-
-## 6. Scheduled Maintenance
-
-### 6.1 Weekly Tasks
-
-| Task | Command | Owner |
-|---|---|---|
-| Review error rates | Check CloudWatch dashboard | On-call |
-| Check disk usage | `aws rds describe-db-instances --query '...storageAllocated'` | On-call |
-| Review slow queries | `pg_stat_statements` top 10 | On-call |
-| Clean up old S3 objects | Verify lifecycle policies working | On-call |
-| Review cost anomalies | Check OpenAI + AWS billing | Engineering |
-
-### 6.2 Monthly Tasks
-
-| Task | Command | Owner |
-|---|---|---|
-| Rotate GitHub tokens | Revoke and re-issue | Security |
-| Review security group rules | `aws ec2 describe-security-groups` | Infra |
-| Update dependencies | `pnpm update` + test | Engineering |
-| Run full benchmark suite | `python eval/run_benchmark.py --config full.yaml` | ML team |
-| Review capacity planning | Check auto-scaling metrics | Infra |
-
-### 6.3 Quarterly Tasks
-
-| Task | Command | Owner |
-|---|---|---|
-| Chaos engineering test | Simulate service failures | SRE |
-| Disaster recovery drill | Restore from backup | Infra |
-| Security audit | Penetration testing | Security |
-| Cost optimization review | Right-size instances | Infra |
-
----
-
-## 7. Monitoring Quick Reference
-
-### 7.1 Key Dashboards
+### 5.1 Key Dashboards
 
 | Dashboard | URL | Purpose |
 |---|---|---|
-| Production Overview | CloudWatch → VibeCoder-Production | High-level health |
-| API Metrics | CloudWatch → VibeCoder-API | Request rate, latency, errors |
-| Database | CloudWatch → VibeCoder-RDS | Connections, CPU, storage |
-| Retrieval Quality | Grafana → VibeCoder-Quality | Precision, faithfulness, latency |
-| Cost | AWS Billing → VibeCoder | API spend, infrastructure cost |
+| Service Health | Grafana → /d/service-health | Overview of all service metrics |
+| API Performance | Grafana → /d/api-perf | Latency, throughput, error rates |
+| Analysis Pipeline | Grafana → /d/analysis-pipeline | Job success rate, stage latency, queue depth |
+| Database | Grafana → /d/database | Connections, query latency, replication lag |
+| LLM Usage | Grafana → /d/llm-usage | Token consumption, cost, latency |
+| WebSocket | Grafana → /d/websocket | Connections, message throughput, errors |
+| Cost Tracker | Grafana → /d/costs | Daily/weekly cost breakdown by service |
 
-### 7.2 Alert Thresholds
+### 5.2 Alert Rules Summary
 
-| Alert | Threshold | Action |
-|---|---|---|
-| API 5xx rate > 0.5% | 5 min window | P1 — investigate immediately |
-| p99 latency > 5s | 5 min window | P2 — check downstream services |
-| DB connections > 160 | 5 min window | P2 — check for connection leaks |
-| Redis memory > 80% | 15 min window | P3 — flush stale data |
-| Analysis failure rate > 5% | 1 hour window | P2 — check worker health |
-| Daily API cost > $300 | Daily | P2 — investigate token consumption |
-| Hallucination rate > 0 | Any occurrence | P1 — halt deployment, investigate |
-| Retrieval precision@3 < 0.75 | Weekly benchmark | P1 — regression, investigate |
-
-### 7.3 Useful One-Liners
-
-```bash
-# Quick health check
-curl -sf https://api.vibecoder.com/health | jq '{api: .api, db: .database, redis: .redis}'
-
-# Count active chat sessions
-psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM chat_sessions WHERE updated_at > now() - interval '5 minutes';"
-
-# Count active mock interviews
-psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM mock_interview_sessions WHERE status = 'active';"
-
-# Top 10 repositories by analysis count
-psql "$DATABASE_URL" -c "SELECT full_name, analysis_count FROM repositories ORDER BY analysis_count DESC LIMIT 10;"
-
-# Worker queue depth
-redis-cli -u "$REDIS_URL" LLEN "bull:analysis:waiting"
-
-# Recent errors
-aws logs tail /ecs/vibecoder-production --since 15m --filter-pattern "ERROR" --format short | tail -20
-
-# ECS service status
-aws ecs describe-services --cluster vibecoder-production-cluster \
-  --services vibecoder-production-api vibecoder-production-websocket vibecoder-production-worker \
-  --query 'services[].{name:serviceName,status:status,desired:desiredCount,running:runningCount}'
-
-# Disk usage on RDS
-aws cloudwatch get-metric-statistics --namespace AWS/RDS \
-  --metric-name FreeStorageSpace \
-  --dimensions Name=DBInstanceIdentifier,Value=vibecoder-production-postgres-0 \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 --statistics Average \
-  --query 'Datapoints[0].Average' --output text | awk '{print $1/1024/1024/1024 " GB free"}'
-```
+| Alert | Condition | Severity | Channel |
+|---|---|---|---|
+| APIErrorRate > 1% | 5 min sustained | P1 | PagerDuty + Slack |
+| APIErrorRate > 0.1% | 15 min sustained | P2 | Slack |
+| APILatencyP95 > 2s | 5 min sustained | P2 | Slack |
+| APILatencyP95 > 5s | 5 min sustained | P1 | PagerDuty |
+| AnalysisFailureRate > 10% | 15 min | P2 | Slack |
+| AnalysisFailureRate > 25% | 5 min | P1 | PagerDuty |
+| DBConnectionPool > 80% | 5 min | P1 | PagerDuty |
+| DBReplicationLag > 30s | 5 min | P2 | Slack |
+| DiskSpace < 20% | 1 hour | P2 | Slack |
+| DiskSpace < 10% | 15 min | P1 | PagerDuty |
+| MemoryUtilization > 85% | 10 min | P2 | Slack |
+| OpenAIQuota > 90% | Daily check | P2 | Slack |
+| OpenAIErrorRate > 5% | 5 min | P1 | PagerDuty |
+| GitHubRateLimit > 80% | 15 min | P3 | Slack |
+| CostDaily > $300 | Daily check | P2 | Email + Slack |
 
 ---
 
-## 8. Post-Mortem Template
+## 6. Post-Incident Procedures
+
+### 6.1 Post-Mortem Template
 
 ```markdown
-# Incident Post-Mortem
+# Incident Post-Mortem: [INCIDENT TITLE]
+
+**Date:** YYYY-MM-DD
+**Duration:** X hours Y minutes
+**Severity:** P1 / P2 / P3
+**Author:** [Name]
+**Status:** Draft / Published
 
 ## Summary
-- **Date:** YYYY-MM-DD
-- **Duration:** X hours Y minutes
-- **Severity:** P1/P2/P3
-- **Impact:** [Description of user impact]
-- **Root Cause:** [Brief description]
+One-paragraph description of what happened and its impact.
+
+## Impact
+- **Users affected:** [number or percentage]
+- **Revenue impact:** $[amount] (if applicable)
+- **Data impact:** [any data loss/corruption]
+- **SLA impact:** [breach of which SLA]
 
 ## Timeline (UTC)
 | Time | Event |
 |---|---|
-| HH:MM | Alert fired / Issue detected |
-| HH:MM | On-call acknowledged |
+| HH:MM | Alert fired in PagerDuty |
+| HH:MM | On-call acknowledged, investigation started |
 | HH:MM | Root cause identified |
 | HH:MM | Mitigation applied |
 | HH:MM | Service restored |
-| HH:MM | Incident closed |
+| HH:MM | Incident resolved |
 
-## What went well
-- [List things that worked well during the response]
+## Root Cause
+Detailed explanation of what caused the incident.
 
-## What went wrong
-- [List things that didn't work well]
+## Detection
+How was the incident detected? Was it automated or user-reported?
 
-## Root Cause Analysis
-[Detailed description of what caused the incident]
+## Mitigation
+What steps were taken to restore service?
 
-## Contributing Factors
-- [List any contributing factors]
+## Resolution
+What permanently fixed the issue?
+
+## What Went Well
+- [List things that worked]
+
+## What Didn't Go Well
+- [List things that need improvement]
 
 ## Action Items
-| Priority | Action | Owner | Due Date | Status |
+| Action | Owner | Priority | Due Date | Status |
 |---|---|---|---|---|
-| P0 | [Immediate fix] | [Name] | [Date] | [Status] |
-| P1 | [Prevent recurrence] | [Name] | [Date] | [Status] |
-| P2 | [Improve detection] | [Name] | [Date] | [Status] |
+| [Action item] | [Name] | P1/P2/P3 | YYYY-MM-DD | Open |
 
 ## Lessons Learned
-- [Key takeaways from this incident]
-
-## Detection Gap
-- How was it detected? (Alert / User report / Manual)
-- How long before detection? (TTD)
-- How long from detection to mitigation? (TTM)
-- Could it have been detected earlier? How?
+Key takeaways for the team.
 ```
+
+### 6.2 Action Item Tracking
+
+- All action items from post-mortems tracked in GitHub Issues
+- Labeled: `incident-action`, `P1`/`P2`/`P3`
+- Assigned to owner with due date
+- Reviewed in weekly engineering standup
+- Completion rate tracked monthly
 
 ---
 
-*This runbook is a living document. Update it after every incident and during quarterly reviews. The goal is to make every on-call shift predictable and every incident response faster than the last.*
+## 7. Runbook Maintenance
+
+| Task | Frequency | Owner |
+|---|---|---|
+| Review and update runbook procedures | Monthly | On-Call Lead |
+| Update alert thresholds based on SLA changes | Quarterly | SRE Team |
+| Runbook review after each incident | After every P1/P2 | Incident Author |
+| Add new runbook entries for new services/features | Per feature launch | Feature Team |
+| Test runbook procedures (game day) | Quarterly | SRE Team |
+| Update escalation contacts | Monthly | Engineering Manager |
+
+---
+
+*This runbook is a living document. After any incident, review and update the relevant sections to prevent future occurrences.*

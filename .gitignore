@@ -1,1 +1,16 @@
+node_modules/
+dist/
+.env
+*.log
 .DS_Store
+coverage/
+.vercel/
+next-env.d.ts
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+packages/database/generated/
+.next/
+.turbo/
+*.tsbuildinfo

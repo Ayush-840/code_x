@@ -1,2020 +1,480 @@
-# Vibe Coder QA Test Plan
-
-## Comprehensive Testing Strategy for the Interview-Prep Platform
+# Vibe Coder — Comprehensive QA Test Plan
 
 ---
 
-## 1. Test Plan Overview
+## 1. Executive Summary
 
-### 1.1 Purpose
+This document defines the quality assurance strategy for the Vibe Coder Interview-Prep Platform. It covers functional testing, integration testing, performance testing, security testing, and user acceptance testing across all platform features. The plan ensures reliability, accuracy, and performance meet the defined SLAs before production deployment.
 
-This test plan defines the comprehensive testing strategy for the Vibe Coder platform. It ensures that every feature — from GitHub repository connection through AI-powered interview preparation — works correctly, reliably, and securely before reaching users.
+**Testing Scope:**
+- GitHub repository connection and analysis pipeline
+- AST parsing and code understanding
+- Hybrid retrieval engine (dense + sparse search)
+- LLM-powered generation (architecture docs, question banks, chat)
+- Mock interview simulator
+- User management, authentication, and billing
+- WebSocket real-time communication
+- API endpoints and data integrity
 
-### 1.2 Scope
+**Quality Gates:**
+| Gate | Threshold | Blocking? |
+|---|---|---|
+| Unit test coverage | ≥ 80% | Yes |
+| Integration test pass rate | 100% | Yes |
+| E2E critical path pass rate | 100% | Yes |
+| Performance: p95 API latency | < 500ms (non-analysis) | Yes |
+| Performance: Analysis job completion | < 15 min (10K LOC repo) | Yes |
+| Security: No critical/high CVEs | 0 | Yes |
+| Retrieval: Precision@8 | ≥ 0.75 | Yes |
+| LLM citation accuracy | ≥ 90% | Yes |
+| Accessibility: WCAG 2.1 AA | Pass | Yes |
 
-| In Scope | Out of Scope |
-|---|---|
-| Authentication & authorization | Third-party service internals (OpenAI, Pinecone) |
-| Repository connection & analysis pipeline | Terraform infrastructure provisioning |
-| AST parsing (all supported languages) | Marketing website |
-| Hybrid retrieval engine | Mobile app (future) |
-| LLM generation & citation grounding | Load testing (covered in evaluation framework) |
-| Chat interface (REST + WebSocket) | Chaos engineering |
-| Mock interview simulator | Penetration testing (covered in security audit) |
-| Billing & subscription management | Internationalization / localization |
-| Error handling & edge cases | Performance benchmarking (covered in evaluation framework) |
+---
 
-### 1.3 Test Levels
+## 2. Test Environment Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       TEST PYRAMID                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│                        ╱╲                                        │
-│                       ╱  ╲     E2E Tests (10%)                  │
-│                      ╱    ╲    Playwright / Cypress              │
-│                     ╱──────╲   Full user workflows               │
-│                    ╱        ╲                                     │
-│                   ╱          ╲  Integration Tests (30%)          │
-│                  ╱            ╲ Supertest / pytest               │
-│                 ╱              ╲ API + DB + external services    │
-│                ╱────────────────╲                                │
-│               ╱                  ╲                               │
-│              ╱    Unit Tests (60%)╲                              │
-│             ╱                      ╲ Jest / vitest / cargo test  │
-│            ╱                        ╲ Isolated function testing  │
-│           ╱──────────────────────────╲                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     TEST ENVIRONMENTS                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │   DEV     │  │   STAGING    │  │    PRE-PROD          │  │
+│  │          │  │              │  │                      │  │
+│  │ Local    │  │ Mirror of    │  │ Prod-like with       │  │
+│  │ Docker   │  │ production   │  │ synthetic data       │  │
+│  │ Compose  │  │ (scaled down)│  │                      │  │
+│  │          │  │              │  │ Load test traffic    │  │
+│  │ Unit +   │  │ Integration  │  │ E2E + Performance    │  │
+│  │ Component│  │ + E2E tests  │  │ + Security scans     │  │
+│  │ tests    │  │              │  │                      │  │
+│  └──────────┘  └──────────────┘  └──────────────────────┘  │
+│                                                              │
+│  Test Data Strategy:                                         │
+│  • 5 reference repositories (100 LOC to 50K LOC)            │
+│  • 3 synthetic repos (edge cases: monorepo, no README,      │
+│    binary-heavy, 50+ languages)                              │
+│  • Fixture datasets for retrieval evaluation                 │
+│  • Mock GitHub API responses (wiremock)                      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 1.4 Test Environment Matrix
+---
 
-| Environment | Purpose | Data | Services |
+## 3. Functional Test Suites
+
+### 3.1 Authentication & User Management
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| AUTH-001 | GitHub OAuth login flow | Click "Connect with GitHub" → authorize → callback | User redirected to dashboard, JWT set, profile created | P0 |
+| AUTH-002 | OAuth cancellation | Click "Connect" → deny access on GitHub | User sees friendly error, no account created | P1 |
+| AUTH-003 | JWT token expiry | Wait for token expiry (15 min) or mock expiry | 401 response, refresh token used automatically | P0 |
+| AUTH-004 | Refresh token rotation | Use valid refresh token to get new access token | New tokens issued, old refresh token invalidated | P0 |
+| AUTH-005 | Logout invalidates session | Logout → attempt API call with old token | Token rejected, user logged out from all tabs | P1 |
+| AUTH-006 | Duplicate GitHub account | Login with same GitHub account from different browser | Same user record, no duplicate | P1 |
+| AUTH-007 | Rate limiting on auth endpoints | Send 100 rapid requests to /auth/github | Rate limited after 10 requests, 429 response | P1 |
+| AUTH-008 | Institutional API key auth | Use valid API key in Authorization header | Authenticated, rate limit = 1000/hr | P1 |
+
+### 3.2 Repository Connection & Management
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| REPO-001 | Connect public repository | Enter valid public repo URL → click Connect | Repo details fetched, status = "connected", files visible | P0 |
+| REPO-002 | Connect private repository | Enter valid private repo URL → authorize access | Repo accessible, correct file count displayed | P0 |
+| REPO-003 | Invalid repository URL | Enter "github.com/invalid/repo" → Connect | Error: "Repository not found or not accessible" | P1 |
+| REPO-004 | Large repository (>10K files) | Connect a monorepo with 15K files | Cloning succeeds, progress indicator shown, no timeout | P0 |
+| REPO-005 | Empty repository | Connect repo with only README | Warning: "No code files detected for analysis" | P2 |
+| REPO-006 | Repository with binary files | Connect repo with images, PDFs, compiled assets | Binaries skipped, code files parsed correctly | P1 |
+| REPO-007 | Disconnect repository | Click Disconnect → confirm | Repo removed, analysis data purged from user view | P1 |
+| REPO-008 | Re-analyze repository | Click Re-analyze on existing repo | New job created, previous artifacts archived | P1 |
+| REPO-009 | Repository access revoked | Revoke GitHub app access → attempt analysis | Graceful error, re-authorization prompt | P1 |
+| REPO-010 | Concurrent analysis of same repo | Trigger two analyses simultaneously | Second request queued or rejected with 409 | P1 |
+| REPO-011 | Repository with submodules | Connect repo with git submodules | Submodules handled (skipped or shallow cloned) | P2 |
+| REPO-012 | .gitignore filtering | Connect repo with large .gitignore | Ignored files excluded from analysis | P1 |
+
+### 3.3 Analysis Pipeline
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| ANL-001 | Full pipeline — small repo | Analyze a 500-line JavaScript repo | Completes in < 2 min, all artifacts generated | P0 |
+| ANL-002 | Full pipeline — medium repo | Analyze a 5K-line TypeScript/Next.js repo | Completes in < 5 min, architecture overview + questions | P0 |
+| ANL-003 | Full pipeline — large repo | Analyze a 30K-line polyglot repo | Completes in < 15 min, no OOM, no data loss | P0 |
+| ANL-004 | Pipeline stage transitions | Monitor status field during analysis | Progresses: queued → cloning → parsing → indexing → generating → completed | P0 |
+| ANL-005 | Pipeline failure recovery | Inject failure at parsing stage | Job marked failed, error message stored, retry possible | P0 |
+| ANL-006 | Progress WebSocket updates | Connect via WebSocket during analysis | Real-time progress events emitted (stage, %, message) | P1 |
+| ANL-007 | Analysis stats accuracy | Complete analysis of known repo | Stats (files_parsed, symbols_extracted) match manual count ±5% | P1 |
+| ANL-008 | Concurrent analyses (multi-user) | 5 users analyze different repos simultaneously | All complete successfully, no cross-contamination | P0 |
+| ANL-009 | Analysis cancellation | Cancel running analysis mid-pipeline | Job cancelled, partial results cleaned up | P2 |
+| ANL-010 | Analysis timeout | Repo that takes > 30 min to analyze | Timed out at 30 min, partial results preserved if possible | P1 |
+
+### 3.4 AST Parsing & Code Understanding
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| PARSE-001 | TypeScript/JavaScript parsing | Parse a TypeScript file with classes, interfaces, functions | All symbols extracted with correct types, line numbers | P0 |
+| PARSE-002 | Python parsing | Parse a Python file with classes, decorators, type hints | All symbols extracted including decorator metadata | P0 |
+| PARSE-003 | Go parsing | Parse a Go file with structs, interfaces, methods | All symbols extracted with correct signatures | P0 |
+| PARSE-004 | Mixed-language repo | Analyze repo with TS, Python, Go, Rust files | Each file parsed with correct language parser | P0 |
+| PARSE-005 | Import/export graph | Parse file with complex imports | Import graph correctly built, circular deps detected | P1 |
+| PARSE-006 | Nested function detection | Parse file with closures, arrow functions, callbacks | Inner functions detected and linked to parent | P1 |
+| PARSE-007 | TypeScript generics | Parse file with complex generic types | Generic parameters captured in symbol metadata | P1 |
+| PARSE-008 | Python async/await | Parse file with async functions and await expressions | Async symbols correctly identified | P1 |
+| PARSE-009 | Minified code | Provide minified JS file | Handled gracefully (skip or attempt parse, no crash) | P2 |
+| PARSE-010 | Very large file (10K+ lines) | Parse a single file with 15K lines | Completes within memory limits, all symbols extracted | P1 |
+| PARSE-011 | Syntax errors in source | Parse file with intentional syntax errors | Error logged, file skipped, analysis continues for other files | P1 |
+| PARSE-012 | Dead code detection | Parse file with unused functions/imports | Unused symbols flagged with low confidence | P2 |
+| PARSE-013 | Module decomposition accuracy | Analyze a well-structured Next.js app | Modules correctly identified: pages, components, hooks, utils, API routes | P0 |
+| PARSE-014 | Module type classification | Analyze repo with services, controllers, models | Each module correctly classified by type | P1 |
+| PARSE-015 | Complexity metrics | Parse files with varying complexity | Cyclomatic/cognitive complexity scores correlate with manual assessment | P1 |
+
+### 3.5 Retrieval Engine
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| RET-001 | Dense search accuracy | Query "authentication middleware" | Returns auth-related code chunks in top-5 results | P0 |
+| RET-002 | Sparse search accuracy | Query "bcrypt password hash" | Returns code containing "bcrypt" and "password" in top-5 | P0 |
+| RET-003 | Hybrid fusion improvement | Compare dense-only vs hybrid results | Hybrid precision ≥ dense-only precision | P0 |
+| RET-004 | Reranker effectiveness | Retrieve top-20 → rerank to top-8 | Reranked results have higher relevance than top-8 of original | P1 |
+| RET-005 | Query expansion | Query "auth flow" → expanded queries | Expansion adds related terms (login, session, token, OAuth) | P1 |
+| RET-006 | Cross-module query | Query about feature spanning multiple modules | Results span relevant modules, not just one | P1 |
+| RET-007 | Empty index | Query against repo with no indexed code | Graceful handling, "no results found" message | P2 |
+| RET-008 | Very short query | Query "config" | Returns configuration-related code, not noise | P1 |
+| RET-009 | Very long query | Query with 500+ tokens | Truncated or handled, relevant results returned | P2 |
+| RET-010 | Citation accuracy | Retrieve result for "user service" | Citations point to actual user service code, not random files | P0 |
+| RET-011 | Freshness after re-analysis | Re-analyze repo, then query | Results reflect updated code, not stale data | P1 |
+| RET-012 | Multi-language retrieval | Query in English about Python code | English query matches Python code chunks | P1 |
+| RET-013 | Retrieval latency | Query against 10K LOC indexed repo | p95 latency < 200ms | P0 |
+| RET-014 | Retrieval under load | 50 concurrent queries | p95 latency < 500ms, no errors | P1 |
+| RET-015 | Precision@8 benchmark | Run against curated test set | Precision@8 ≥ 0.75 | P0 |
+
+### 3.6 LLM Generation (Chat)
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| CHAT-001 | Basic question answering | Ask "What does this project do?" | Correct, citation-grounded answer about project purpose | P0 |
+| CHAT-002 | Code-specific question | Ask "How does the auth middleware work?" | Detailed explanation with file + line citations | P0 |
+| CHAT-003 | Citation verification | Check all cited file paths and line ranges | All citations resolve to actual code locations | P0 |
+| CHAT-004 | Streaming response | Send message via WebSocket | Tokens stream in real-time, no large delays between chunks | P0 |
+| CHAT-005 | Conversation context | Send 5 messages in sequence | Assistant maintains context across messages | P0 |
+| CHAT-006 | Follow-up questions | Receive assistant response with follow-ups | Follow-ups are relevant and clickable | P1 |
+| CHAT-007 | Hallucination detection | Ask about feature that doesn't exist in codebase | Assistant says "I don't see evidence of this in the codebase" | P0 |
+| CHAT-008 | Token usage tracking | Send messages and check usage stats | Token count matches approximate calculation | P1 |
+| CHAT-009 | Rate limiting | Send 100 messages in rapid succession | Rate limit enforced, graceful error messages | P1 |
+| CHAT-010 | Large codebase context | Query about project with 50K LOC | Response is grounded, not generic | P1 |
+| CHAT-011 | Multi-module question | Ask about interaction between two modules | Response references both modules with citations | P1 |
+| CHAT-012 | Architecture explanation | Ask "Explain the architecture" | Structured overview with module relationships | P0 |
+| CHAT-013 | Study guide generation | Ask "Help me study this codebase for an interview" | Structured study plan with prioritized topics | P1 |
+| CHAT-014 | Session persistence | Close browser → reopen → return to session | Chat history preserved and loaded correctly | P1 |
+| CHAT-015 | Response latency | Send question, measure time to first token | TTFT < 2s, total response < 10s | P0 |
+
+### 3.7 Mock Interview Simulator
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| MOCK-001 | Start interview session | Select persona + difficulty → Start | Session created, first question generated | P0 |
+| MOCK-002 | Submit answer | Type answer → Submit | Score returned with feedback, next question presented | P0 |
+| MOCK-003 | Complete interview (5 questions) | Answer all 5 questions | Final report with scores, strengths, weaknesses, study plan | P0 |
+| MOCK-004 | Persona: Friendly Senior | Select "Friendly Senior" persona | Questions are encouraging, coaching breaks offered | P1 |
+| MOCK-005 | Persona: Rigorous Hiring Manager | Select "Rigorous Hiring Manager" | Questions are challenging, direct feedback | P1 |
+| MOCK-006 | Persona: Curious Peer | Select "Curious Peer" | Questions are exploratory, conversational tone | P1 |
+| MOCK-007 | Difficulty: Junior | Select Junior difficulty | Questions focus on fundamentals, easier scope | P1 |
+| MOCK-008 | Difficulty: Senior | Select Senior difficulty | Questions about trade-offs, system design, edge cases | P1 |
+| MOCK-009 | Coaching breaks | After 2 difficult answers | Coaching break provides helpful code snippets | P1 |
+| MOCK-010 | Score rubric accuracy | Compare AI scores with human rubric scores | Correlation ≥ 0.7 with human graders | P0 |
+| MOCK-011 | Citation in questions | Review generated questions | All questions cite actual code locations | P0 |
+| MOCK-012 | Timed session | Complete interview within time limit | Timer displayed, time recorded per question | P1 |
+| MOCK-013 | Abandon session | Close tab mid-interview | Session marked abandoned, partial results saved | P2 |
+| MOCK-014 | Resume interrupted session | Reopen abandoned session | Can resume from where left off | P2 |
+| MOCK-015 | Random persona | Select "Random" persona | Random persona selected from the pool | P2 |
+| MOCK-016 | Study recommendations | Complete interview → review recommendations | Recommendations are specific, actionable, code-referenced | P0 |
+| MOCK-017 | Session history | View past mock interviews | All completed sessions listed with scores and dates | P1 |
+| MOCK-018 | Comparison across sessions | Complete 3 interviews over time | Performance trends visible (improving scores) | P2 |
+
+### 3.8 Architecture & Module Explanations
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| ARCH-001 | Architecture overview accuracy | View architecture for known repo | Overview correctly describes project structure | P0 |
+| ARCH-002 | Module purpose accuracy | Read module explanation for "auth" module | Correctly describes authentication purpose | P0 |
+| ARCH-003 | Key abstractions listed | Check "key abstractions" for a module | Lists main classes/functions/interfaces | P1 |
+| ARCH-004 | Failure modes documented | Check failure modes for critical module | Describes likely failure scenarios | P1 |
+| ARCH-005 | Dependency graph visualization | Load dependency graph | Nodes = modules, edges = dependencies, layout readable | P1 |
+| ARCH-006 | Complexity scoring | Check complexity scores across modules | Scores correlate with actual code complexity | P1 |
+| ARCH-007 | Large project architecture | View architecture for 50K LOC project | Overview is coherent, not overwhelming | P1 |
+| ARCH-008 | Tech stack detection | View tech stack for known project | All major technologies correctly identified | P1 |
+
+### 3.9 Interview Question Bank
+
+| ID | Test Case | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| QB-001 | Question diversity | Review generated question bank | Mix of categories: architecture, security, performance, debugging | P0 |
+| QB-002 | Difficulty levels | Filter by difficulty | Junior questions are simpler, senior questions require depth | P1 |
+| QB-003 | Model answer quality | Read model answers for 10 questions | Answers are accurate, detailed, and cite code | P0 |
+| QB-004 | Citations in answers | Check citations in 20 random answers | All citations resolve to actual code locations | P0 |
+| QB-005 | Follow-up questions | Review follow-up suggestions | Follow-ups are relevant and progressively deeper | P1 |
+| QB-006 | Question-source mapping | Check source_modules for each question | Modules referenced are actually relevant | P1 |
+| QB-007 | Category coverage | Count questions per category | All 9 categories represented with ≥ 3 questions each | P1 |
+| QB-008 | Question uniqueness | Check for duplicate questions | No duplicate questions in the bank | P1 |
+
+---
+
+## 4. Integration Test Suites
+
+### 4.1 End-to-End Flows
+
+| ID | Flow | Steps | Expected Result | Priority |
+|---|---|---|---|---|
+| E2E-001 | New user onboarding | Signup → connect repo → first analysis → view results | Complete flow works, no dead ends | P0 |
+| E2E-002 | Analysis → Chat | Analyze repo → ask questions about architecture | Chat responses reference analyzed code | P0 |
+| E2E-003 | Analysis → Mock Interview | Analyze repo → complete mock interview → view report | Interview questions are repo-specific, scores recorded | P0 |
+| E2E-004 | Chat → Deep dive → Study guide | Chat about auth → deep dive into module → generate study plan | Context flows through all stages | P1 |
+| E2E-005 | Upgrade flow | Free user → hit limit → upgrade → continue | Payment processed, limits updated, user continues | P0 |
+| E2E-006 | Re-analysis flow | Old analysis → update code → re-analyze → chat | New analysis reflects code changes | P1 |
+| E2E-007 | Multi-repo workflow | Connect 3 repos → analyze all → compare architectures | Each repo's data is isolated and correct | P1 |
+| E2E-008 | Offline/reconnect | Analyze repo → lose connection → reconnect | Session resumes, no data loss | P2 |
+
+### 4.2 Service Integration Tests
+
+| ID | Integration | Test | Expected Result | Priority |
+|---|---|---|---|---|
+| INT-001 | API ↔ Database | Create analysis job, verify in DB | Job record created with correct schema | P0 |
+| INT-002 | API ↔ Redis | Cache query results, verify cache hit | Second query returns cached result | P1 |
+| INT-003 | API ↔ Elasticsearch | Index chunks, search for them | Chunks found with correct scores | P0 |
+| INT-004 | API ↔ Pinecone | Insert embeddings, query them | Vector search returns correct results | P0 |
+| INT-005 | API ↔ GitHub | Fetch repo metadata, clone repo | Data matches GitHub API response | P0 |
+| INT-006 | API ↔ OpenAI | Send prompt, verify response format | Response parsed correctly, token count tracked | P0 |
+| INT-007 | Worker ↔ Queue | Enqueue job, verify worker picks up | Job processed within 30 seconds | P0 |
+| INT-008 | WebSocket ↔ API | Send chat message via WS, verify persistence | Message stored in DB, response streamed back | P0 |
+| INT-009 | API ↔ Stripe | Create checkout, verify webhook | Subscription updated, limits refreshed | P0 |
+| INT-010 | Full pipeline integration | Trigger analysis, monitor all services | All services communicate correctly, artifacts produced | P0 |
+
+---
+
+## 5. Performance Test Plan
+
+### 5.1 Load Testing Scenarios
+
+| ID | Scenario | Load | Duration | Success Criteria |
+|---|---|---|---|---|
+| PERF-001 | Normal traffic | 50 concurrent users, 10 req/s | 30 min | p95 < 500ms, 0 errors |
+| PERF-002 | Peak traffic | 200 concurrent users, 40 req/s | 15 min | p95 < 1s, error rate < 1% |
+| PERF-003 | Analysis spike | 20 concurrent analyses triggered | Until completion | All complete < 15 min, no OOM |
+| PERF-004 | Chat streaming | 100 concurrent chat sessions | 15 min | TTFT < 2s, no dropped connections |
+| PERF-005 | Mock interview load | 50 concurrent mock interviews | 20 min | All complete, scores generated |
+| PERF-006 | Database stress | 500 concurrent queries | 10 min | p99 < 100ms, no connection pool exhaustion |
+| PERF-007 | WebSocket scale | 1000 concurrent WebSocket connections | 30 min | < 1% disconnections, messages delivered |
+| PERF-008 | Endurance test | Normal traffic | 24 hours | No memory leaks, no degradation |
+
+### 5.2 Key Performance Metrics
+
+| Metric | Target | Measurement Method |
+|---|---|---|
+| API response time (non-analysis) | p95 < 500ms | Application Performance Monitoring |
+| Chat first token latency | p95 < 2s | WebSocket timestamp delta |
+| Chat full response time | p95 < 10s | WebSocket timestamp delta |
+| Analysis completion time | p95 < 15 min (10K LOC) | Job timestamp delta |
+| Retrieval query latency | p95 < 200ms | Backend instrumentation |
+| Database query latency | p95 < 100ms | pg_stat_statements |
+| Memory usage per worker | < 2GB peak | Container metrics |
+| CPU utilization | < 70% sustained | ECS metrics |
+| Error rate | < 0.1% | Log aggregation |
+
+### 5.3 Stress Testing
+
+| ID | Stress Scenario | Expected Behavior |
+|---|---|---|
+| STRESS-001 | 10x normal traffic | Graceful degradation, 429 responses, no crash |
+| STRESS-002 | Database connection pool exhaustion | Queued requests, no dropped connections |
+| STRESS-003 | Redis failure | Fallback to direct DB queries, reduced performance |
+| STRESS-004 | OpenAI API rate limit hit | Queued generation, user notified of delay |
+| STRESS-005 | GitHub API rate limit hit | Analysis queued, retried when limit resets |
+| STRESS-006 | Disk space exhaustion (repo clones) | Old clones cleaned up, new analysis still works |
+| STRESS-007 | Worker process crash | Job detected, retried automatically |
+
+---
+
+## 6. Security Test Plan
+
+| ID | Test Case | Method | Expected Result | Priority |
+|---|---|---|---|---|
+| SEC-001 | SQL injection | Attempt injection in all API parameters | All inputs parameterized, no injection | P0 |
+| SEC-002 | XSS (stored) | Submit script tags in chat messages | Messages sanitized, no script execution | P0 |
+| SEC-003 | XSS (reflected) | Inject script in URL parameters | Parameters escaped in responses | P0 |
+| SEC-004 | CSRF | Submit forms without CSRF token | Requests rejected with 403 | P0 |
+| SEC-005 | JWT manipulation | Modify JWT payload, attempt use | Signature validation fails, 401 returned | P0 |
+| SEC-006 | Horizontal privilege escalation | Access another user's repo data | 403 Forbidden, data not leaked | P0 |
+| SEC-007 | Vertical privilege escalation | Free user accessing pro features | Upgrade prompt, access denied | P1 |
+| SEC-008 | Rate limiting bypass | Attempt to bypass rate limits | Limits enforced at gateway level | P1 |
+| SEC-009 | Repository data isolation | Verify User A cannot see User B's repos | Strict tenant isolation in all queries | P0 |
+| SEC-010 | GitHub token exposure | Scan logs and API responses for tokens | No tokens in plaintext anywhere | P0 |
+| SEC-011 | Dependency vulnerability scan | Run npm audit, cargo audit, pip-audit | No critical/high vulnerabilities | P0 |
+| SEC-012 | Container image scan | Scan Docker images for CVEs | No critical/high CVEs in base images | P1 |
+| SEC-013 | API authentication bypass | Call protected endpoints without auth | 401 returned for all protected routes | P0 |
+| SEC-014 | File path traversal | Attempt to access files outside repo scope | Path traversal blocked, 400 returned | P0 |
+| SEC-015 | Prompt injection in chat | Send malicious instructions in chat | LLM ignores injection, responds appropriately | P0 |
+| SEC-016 | Data at rest encryption | Verify database encryption | All data encrypted with AES-256 | P1 |
+| SEC-017 | TLS in transit | Verify all connections use HTTPS | HTTP requests redirected, no mixed content | P0 |
+| SEC-018 | Secret management | Verify secrets in Secrets Manager | No secrets in code, env vars, or logs | P0 |
+
+---
+
+## 7. Accessibility Test Plan
+
+| ID | Test Case | WCAG Criterion | Expected Result | Priority |
+|---|---|---|---|---|
+| A11Y-001 | Keyboard navigation | 2.1.1 | All interactive elements reachable via keyboard | P0 |
+| A11Y-002 | Screen reader support | 4.1.2 | All elements have appropriate ARIA labels | P1 |
+| A11Y-003 | Color contrast | 1.4.3 | Text contrast ratio ≥ 4.5:1 | P1 |
+| A11Y-004 | Focus indicators | 2.4.7 | Visible focus outline on all interactive elements | P1 |
+| A11Y-005 | Form labels | 1.3.1 | All form inputs have associated labels | P1 |
+| A11Y-006 | Error identification | 3.3.1 | Errors clearly described and associated with fields | P1 |
+| A11Y-007 | Responsive design | 1.4.10 | Readable and usable at 200% zoom | P1 |
+| A11Y-008 | Chat accessibility | 4.1.3 | Chat messages announced to screen readers | P2 |
+| A11Y-009 | Mock interview accessibility | 4.1.3 | Interview flow fully accessible via keyboard/screen reader | P2 |
+| A11Y-010 | Code display accessibility | 1.4.1 | Code blocks have sufficient contrast, not color-only indicators | P2 |
+
+---
+
+## 8. API Contract Testing
+
+### 8.1 Response Schema Validation
+
+| Endpoint | Method | Validation | Priority |
 |---|---|---|---|
-| **Local** | Developer testing | Synthetic test data | Docker Compose |
-| **CI** | Automated test suite | Isolated per-test DB | GitHub Actions |
-| **Staging** | Pre-production validation | Anonymized production subset | Full AWS stack |
-| **Production** | Smoke tests & monitoring | Live data | Full AWS stack |
+| /api/v1/repos | GET | Array of Repository objects with required fields | P0 |
+| /api/v1/repos/:id | GET | Single Repository with all fields | P0 |
+| /api/v1/repos/:id/artifacts | GET | Array of AnalysisArtifact objects | P0 |
+| /api/v1/repos/:id/questions | GET | Array of InterviewQuestion objects with citations | P0 |
+| /api/v1/chat/sessions | POST | Returns ChatSession with id, created_at | P1 |
+| /api/v1/chat/sessions/:id/messages | GET | Array of ChatMessage objects with pagination | P1 |
+| /api/v1/mock-interviews | POST | Returns MockInterviewSession with id | P1 |
+| /api/v1/usage/summary | GET | UsageSummary with limits and remaining counts | P1 |
 
----
+### 8.2 Error Response Validation
 
-## 2. Test Case Inventory
-
-### 2.1 Module Breakdown
-
-| Module | Test Cases | Priority | Automation |
+| Scenario | Expected Status | Expected Body Shape | Priority |
 |---|---|---|---|
-| Authentication | 42 | P0 | 100% |
-| Repository Management | 38 | P0 | 100% |
-| Analysis Pipeline | 56 | P0 | 95% |
-| AST Parser | 64 | P0 | 100% |
-| Retrieval Engine | 48 | P0 | 100% |
-| Generation Service | 44 | P0 | 90% |
-| Chat Interface | 36 | P1 | 100% |
-| Mock Interview | 40 | P1 | 95% |
-| Billing & Subscriptions | 28 | P1 | 100% |
-| Admin & Analytics | 20 | P2 | 80% |
-| **Total** | **416** | | **~96%** |
+| Not found | 404 | `{ error: { code, message, details } }` | P0 |
+| Validation error | 400 | `{ error: { code, message, fieldErrors } }` | P0 |
+| Unauthorized | 401 | `{ error: { code, message } }` | P0 |
+| Forbidden | 403 | `{ error: { code, message } }` | P0 |
+| Rate limited | 429 | `{ error: { code, message, retryAfter } }` | P1 |
+| Server error | 500 | `{ error: { code, message } }` (no stack trace) | P0 |
+| Conflict | 409 | `{ error: { code, message, conflictingResourceId } }` | P2 |
 
 ---
 
-## 3. Authentication & Authorization
+## 9. Regression Test Suite
 
-### 3.1 Unit Tests
+### 9.1 Automated Regression Tests (Run on Every PR)
 
-```typescript
-// tests/unit/auth/jwt.test.ts
-
-describe('JWT Token Management', () => {
-  describe('generateAccessToken', () => {
-    it('should generate a valid JWT with correct claims', () => {
-      const token = generateAccessToken({ userId: 'usr_123', plan: 'pro' });
-      const decoded = jwt.verify(token, JWT_SECRET);
-      expect(decoded.sub).toBe('usr_123');
-      expect(decoded.plan).toBe('pro');
-      expect(decoded.exp - decoded.iat).toBe(900); // 15 minutes
-    });
-
-    it('should include jti (token ID) for revocation tracking', () => {
-      const token = generateAccessToken({ userId: 'usr_123' });
-      const decoded = jwt.verify(token, JWT_SECRET);
-      expect(decoded.jti).toBeDefined();
-      expect(typeof decoded.jti).toBe('string');
-    });
-
-    it('should reject expired tokens', () => {
-      const token = jwt.sign(
-        { sub: 'usr_123', exp: Math.floor(Date.now() / 1000) - 100 },
-        JWT_SECRET
-      );
-      expect(() => verifyAccessToken(token)).toThrow('TokenExpiredError');
-    });
-
-    it('should reject tokens signed with wrong secret', () => {
-      const token = jwt.sign({ sub: 'usr_123' }, 'wrong-secret');
-      expect(() => verifyAccessToken(token)).toThrow('JsonWebTokenError');
-    });
-  });
-
-  describe('generateRefreshToken', () => {
-    it('should generate a refresh token with 7-day expiry', () => {
-      const token = generateRefreshToken('usr_123');
-      const decoded = jwt.verify(token, REFRESH_SECRET);
-      expect(decoded.exp - decoded.iat).toBe(604800); // 7 days
-    });
-
-    it('should include token family for rotation tracking', () => {
-      const token = generateRefreshToken('usr_123');
-      const decoded = jwt.verify(token, REFRESH_SECRET);
-      expect(decoded.family).toBeDefined();
-    });
-  });
-
-  describe('Password Hashing', () => {
-    it('should hash password with bcrypt cost factor 12', async () => {
-      const hash = await hashPassword('testpassword');
-      expect(hash).toMatch(/^\$2b\$12\$/);
-    });
-
-    it('should verify correct password', async () => {
-      const hash = await hashPassword('correct');
-      expect(await verifyPassword('correct', hash)).toBe(true);
-    });
-
-    it('should reject incorrect password', async () => {
-      const hash = await hashPassword('correct');
-      expect(await verifyPassword('wrong', hash)).toBe(false);
-    });
-
-    it('should handle empty password gracefully', async () => {
-      await expect(hashPassword('')).rejects.toThrow('Password cannot be empty');
-    });
-  });
-});
-```
-
-### 3.2 Integration Tests
-
-```typescript
-// tests/integration/auth/github-oauth.test.ts
-
-describe('GitHub OAuth Flow', () => {
-  let app: Express;
-  let db: PrismaClient;
-
-  beforeAll(async () => {
-    app = await createTestApp();
-    db = await createTestDatabase();
-  });
-
-  afterAll(async () => {
-    await db.$disconnect();
-  });
-
-  describe('POST /auth/github/callback', () => {
-    it('should create new user on first login', async () => {
-      mockGitHubCodeExchange({ github_id: 99999, email: 'new@test.com' });
-
-      const res = await request(app)
-        .post('/v1/auth/github/callback')
-        .send({ code: 'valid-code', state: 'valid-state' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.user.email).toBe('new@test.com');
-      expect(res.body.data.user.planTier).toBe('free');
-      expect(res.body.data.isNewUser).toBe(true);
-      expect(res.body.data.tokens.accessToken).toBeDefined();
-      expect(res.body.data.subscription.reposRemaining).toBe(3);
-    });
-
-    it('should return existing user on subsequent login', async () => {
-      await db.user.create({
-        data: { github_id: 88888, email: 'existing@test.com', username: 'existing' }
-      });
-      mockGitHubCodeExchange({ github_id: 88888, email: 'existing@test.com' });
-
-      const res = await request(app)
-        .post('/v1/auth/github/callback')
-        .send({ code: 'valid-code', state: 'valid-state' });
-
-      expect(res.body.data.isNewUser).toBe(false);
-    });
-
-    it('should reject invalid OAuth code', async () => {
-      mockGitHubCodeExchangeFails('bad_verification_code');
-
-      const res = await request(app)
-        .post('/v1/auth/github/callback')
-        .send({ code: 'invalid-code', state: 'valid-state' });
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe('UNAUTHORIZED');
-    });
-
-    it('should reject expired CSRF state', async () => {
-      const res = await request(app)
-        .post('/v1/auth/github/callback')
-        .send({ code: 'valid-code', state: 'expired-state' });
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe('CSRF_VALIDATION_FAILED');
-    });
-
-    it('should return GitHub token encrypted in database', async () => {
-      mockGitHubCodeExchange({ github_id: 77777, email: 'crypto@test.com' });
-
-      await request(app)
-        .post('/v1/auth/github/callback')
-        .send({ code: 'valid-code', state: 'valid-state' });
-
-      const user = await db.user.findUnique({ where: { github_id: 77777 } });
-      // Token should be encrypted, not plaintext
-      expect(user.github_token).not.toMatch(/^gho_/);
-      expect(user.github_token).toMatch(/^enc:/);
-    });
-  });
-
-  describe('POST /auth/refresh', () => {
-    it('should issue new access token with valid refresh token', async () => {
-      const refreshToken = generateRefreshToken('usr_123');
-
-      const res = await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken });
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.accessToken).toBeDefined();
-      expect(res.body.data.expiresIn).toBe(900);
-    });
-
-    it('should invalidate previous refresh token (rotation)', async () => {
-      const refreshToken = generateRefreshToken('usr_123');
-
-      // First refresh — should succeed
-      await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken });
-
-      // Second refresh with same token — should fail (rotation)
-      const res = await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken });
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe('TOKEN_REUSE_DETECTED');
-    });
-
-    it('should detect token family reuse (potential theft)', async () => {
-      const { token: token1, family } = generateRefreshTokenWithFamily('usr_123');
-
-      // Rotate to get token2
-      const res2 = await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken: token1 });
-
-      // Rotate to get token3
-      await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken: res2.body.data.refreshToken });
-
-      // Try to use token1 again (replay attack)
-      const res = await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken: token1 });
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe('TOKEN_FAMILY_COMPROMISED');
-
-      // Verify entire family is invalidated
-      const res3 = await request(app)
-        .post('/v1/auth/refresh')
-        .send({ refreshToken: res2.body.data.refreshToken });
-
-      expect(res3.status).toBe(401);
-    });
-  });
-});
-```
-
-### 3.3 Authorization Tests
-
-```typescript
-// tests/integration/auth/authorization.test.ts
-
-describe('Authorization', () => {
-  const endpoints = [
-    { method: 'GET', path: '/v1/users/me', auth: true },
-    { method: 'POST', path: '/v1/repos/connect', auth: true },
-    { method: 'GET', path: '/v1/repos', auth: true },
-    { method: 'GET', path: '/v1/repos/:id', auth: true },
-    { method: 'POST', path: '/v1/repos/:id/analyze', auth: true },
-    { method: 'POST', path: '/v1/auth/refresh', auth: false },
-  ];
-
-  endpoints.forEach(({ method, path, auth }) => {
-    it(`${method} ${path} should ${auth ? 'require' : 'not require'} authentication`, async () => {
-      const res = await request(app)[method.toLowerCase()](path);
-      if (auth) {
-        expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe('UNAUTHORIZED');
-      } else {
-        expect(res.status).not.toBe(401);
-      }
-    });
-  });
-
-  it('should prevent user A from accessing user B repository', async () => {
-    const userA = await createAuthenticatedUser('userA');
-    const userB = await createAuthenticatedUser('userB');
-    const repoB = await db.repository.create({
-      data: { user_id: userB.id, full_name: 'userB/project', github_repo_id: 111 }
-    });
-
-    const res = await request(app)
-      .get(`/v1/repos/${repoB.id}`)
-      .set('Authorization', `Bearer ${userA.token}`);
-
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
-  });
-
-  it('should enforce plan-based rate limits', async () => {
-    const freeUser = await createAuthenticatedUser('free', { plan: 'free' });
-
-    // Make requests up to the limit
-    for (let i = 0; i < 30; i++) {
-      await request(app)
-        .get('/v1/repos')
-        .set('Authorization', `Bearer ${freeUser.token}`);
-    }
-
-    // 31st request should be rate limited
-    const res = await request(app)
-      .get('/v1/repos')
-      .set('Authorization', `Bearer ${freeUser.token}`);
-
-    expect(res.status).toBe(429);
-    expect(res.headers['x-ratelimit-remaining']).toBe('0');
-    expect(res.body.error.code).toBe('RATE_LIMITED');
-  });
-});
-```
-
----
-
-## 4. Repository Management
-
-### 4.1 Unit Tests
-
-```typescript
-// tests/unit/repos/repository.test.ts
-
-describe('Repository Service', () => {
-  describe('connectRepository', () => {
-    it('should parse valid GitHub URL', () => {
-      expect(parseGitHubUrl('https://github.com/user/repo')).toEqual({
-        owner: 'user', repo: 'repo'
-      });
-    });
-
-    it('should parse shorthand format', () => {
-      expect(parseGitHubUrl('user/repo')).toEqual({
-        owner: 'user', repo: 'repo'
-      });
-    });
-
-    it('should reject invalid URLs', () => {
-      expect(() => parseGitHubUrl('https://gitlab.com/user/repo')).toThrow('INVALID_GITHUB_URL');
-      expect(() => parseGitHubUrl('not-a-url')).toThrow('INVALID_GITHUB_URL');
-      expect(() => parseGitHubUrl('')).toThrow('INVALID_GITHUB_URL');
-    });
-
-    it('should enforce max repository size', async () => {
-      mockGitHubRepoInfo({ size: 120_000 }); // 120MB
-
-      await expect(
-        connectRepository('user/large-repo', githubToken)
-      ).rejects.toThrow('REPO_TOO_LARGE');
-    });
-  });
-
-  describe('Analysis Configuration', () => {
-    it('should apply default excluded paths', () => {
-      const config = getDefaultAnalysisConfig();
-      expect(config.excludedPaths).toContain('node_modules');
-      expect(config.excludedPaths).toContain('.git');
-      expect(config.excludedPaths).toContain('dist');
-    });
-
-    it('should merge user config with defaults', () => {
-      const config = mergeAnalysisConfig(
-        getDefaultAnalysisConfig(),
-        { excludedPaths: ['custom-dir'], includeTests: true }
-      );
-      expect(config.excludedPaths).toContain('node_modules');
-      expect(config.excludedPaths).toContain('custom-dir');
-      expect(config.includeTests).toBe(true);
-    });
-  });
-});
-```
-
-### 4.2 Integration Tests
-
-```typescript
-// tests/integration/repos/repository.test.ts
-
-describe('Repository API', () => {
-  describe('POST /repos/connect', () => {
-    it('should connect a valid repository', async () => {
-      mockGitHubRepo({
-        full_name: 'test-user/portfolio-api',
-        default_branch: 'main',
-        language: 'TypeScript',
-        size: 5000
-      });
-
-      const res = await request(app)
-        .post('/v1/repos/connect')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ fullName: 'test-user/portfolio-api' });
-
-      expect(res.status).toBe(201);
-      expect(res.body.data.fullName).toBe('test-user/portfolio-api');
-      expect(res.body.data.languagePrimary).toBe('TypeScript');
-      expect(res.body.data.analysisCount).toBe(0);
-    });
-
-    it('should reject duplicate connection', async () => {
-      await connectRepo('test-user/portfolio-api');
-
-      const res = await request(app)
-        .post('/v1/repos/connect')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ fullName: 'test-user/portfolio-api' });
-
-      expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('REPO_ALREADY_CONNECTED');
-    });
-
-    it('should enforce repository limit per plan', async () => {
-      // Connect 3 repos (free tier limit)
-      for (let i = 0; i < 3; i++) {
-        await connectRepo(`user/repo-${i}`);
-      }
-
-      const res = await request(app)
-        .post('/v1/repos/connect')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ fullName: 'user/repo-4' });
-
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('PLAN_LIMIT_EXCEEDED');
-    });
-  });
-
-  describe('POST /repos/:repoId/analyze', () => {
-    it('should queue analysis job', async () => {
-      const repo = await connectRepo('user/analyzable-repo');
-
-      const res = await request(app)
-        .post(`/v1/repos/${repo.id}/analyze`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({});
-
-      expect(res.status).toBe(202);
-      expect(res.body.data.status).toBe('queued');
-      expect(res.body.data.jobId).toBeDefined();
-    });
-
-    it('should prevent concurrent analysis', async () => {
-      const repo = await connectRepo('user/repo');
-      await triggerAnalysis(repo.id); // Start first analysis
-
-      const res = await request(app)
-        .post(`/v1/repos/${repo.id}/analyze`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({});
-
-      expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe('ANALYSIS_IN_PROGRESS');
-    });
-
-    it('should respect plan analysis limits', async () => {
-      const repo = await connectRepo('user/repo');
-      // Use up free tier limit (1 analysis)
-      await triggerAnalysis(repo.id);
-      await waitForAnalysisCompletion();
-
-      const res = await request(app)
-        .post(`/v1/repos/${repo.id}/analyze`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({});
-
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('QUOTA_EXCEEDED');
-    });
-  });
-
-  describe('GET /repos/:repoId/status', () => {
-    it('should report analysis progress', async () => {
-      const repo = await connectRepo('user/repo');
-      const job = await triggerAnalysis(repo.id);
-
-      const res = await request(app)
-        .get(`/v1/repos/${repo.id}/status`)
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(200);
-      expect(['queued', 'cloning', 'parsing', 'indexing', 'generating']).toContain(
-        res.body.data.status
-      );
-      expect(res.body.data.progress).toBeDefined();
-    });
-  });
-});
-```
-
----
-
-## 5. Analysis Pipeline
-
-### 5.1 AST Parser Tests
-
-```python
-# tests/unit/ast_parser/test_parser.py
-
-import pytest
-from ast_parser import parse_file, SupportedLanguage
-
-class TestTypeScriptParser:
-    def test_extract_function_symbols(self):
-        code = """
-        export function authenticate(token: string): User {
-          const decoded = jwt.verify(token, SECRET);
-          return decoded as User;
-        }
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        assert len(result.symbols) == 1
-        assert result.symbols[0].name == "authenticate"
-        assert result.symbols[0].symbol_type == "function"
-        assert result.symbols[0].is_exported is True
-        assert result.symbols[0].parameters[0].name == "token"
-        assert result.symbols[0].parameters[0].type == "string"
-        assert result.symbols[0].return_type == "User"
-
-    def test_extract_class_symbols(self):
-        code = """
-        export class AuthService {
-          private readonly jwtSecret: string;
-
-          constructor(secret: string) {
-            this.jwtSecret = secret;
-          }
-
-          async login(email: string, password: string): Promise<TokenPair> {
-            // implementation
-          }
-        }
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        assert len(result.symbols) >= 1
-        class_symbol = [s for s in result.symbols if s.symbol_type == "class"][0]
-        assert class_symbol.name == "AuthService"
-        assert class_symbol.visibility == "public"
-        assert class_symbol.is_exported is True
-
-    def test_extract_interface_symbols(self):
-        code = """
-        export interface User {
-          id: string;
-          email: string;
-          plan: 'free' | 'pro';
-        }
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        interface_symbol = result.symbols[0]
-        assert interface_symbol.symbol_type == "interface"
-        assert interface_symbol.name == "User"
-
-    def test_detect_imports(self):
-        code = """
-        import { Router } from 'express';
-        import jwt from 'jsonwebtoken';
-        import type { User } from './types';
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        assert len(result.imports) == 3
-        assert result.imports[0].source == "express"
-        assert result.imports[1].is_default is True
-        assert result.imports[2].is_type_only is True
-
-    def test_calculate_cyclomatic_complexity(self):
-        simple_code = "function add(a, b) { return a + b; }"
-        complex_code = """
-        function processUser(user) {
-          if (!user) return null;
-          if (user.plan === 'pro') {
-            if (user.active) {
-              return { ...user, features: ALL_FEATURES };
-            } else {
-              return { ...user, features: BASIC_FEATURES };
-            }
-          }
-          return user;
-        }
-        """
-
-        simple = parse_file(simple_code, SupportedLanguage.TYPESCRIPT)
-        complex = parse_file(complex_code, SupportedLanguage.TYPESCRIPT)
-
-        assert simple.complexity <= 1.0
-        assert complex.complexity > 1.0
-
-    def test_handle_empty_file(self):
-        result = parse_file("", SupportedLanguage.TYPESCRIPT)
-        assert len(result.symbols) == 0
-        assert len(result.imports) == 0
-        assert result.complexity == 0.0
-
-    def test_handle_syntax_error_gracefully(self):
-        broken_code = "function broken( { missing closing paren"
-        result = parse_file(broken_code, SupportedLanguage.TYPESCRIPT)
-        # Should not throw, should return partial results
-        assert result.symbols == []
-        assert hasattr(result, 'error')
-
-
-class TestPythonParser:
-    def test_extract_function_symbols(self):
-        code = """
-        def authenticate(token: str) -> User:
-            decoded = jwt.verify(token, SECRET)
-            return decoded
-        """
-        result = parse_file(code, SupportedLanguage.PYTHON)
-
-        assert len(result.symbols) == 1
-        assert result.symbols[0].name == "authenticate"
-        assert result.symbols[0].symbol_type == "function"
-        assert result.symbols[0].return_type == "User"
-
-    def test_extract_class_with_decorators(self):
-        code = """
-        @dataclass
-        class User:
-            id: str
-            email: str
-        """
-        result = parse_file(code, SupportedLanguage.PYTHON)
-
-        class_symbol = result.symbols[0]
-        assert class_symbol.symbol_type == "class"
-        assert "dataclass" in class_symbol.annotations
-
-
-class TestGoParser:
-    def test_extract_function_symbols(self):
-        code = """
-        func Authenticate(token string) (*User, error) {
-            decoded, err := jwt.Verify(token, secret)
-            if err != nil {
-                return nil, err
-            }
-            return decoded, nil
-        }
-        """
-        result = parse_file(code, SupportedLanguage.GO)
-
-        assert len(result.symbols) == 1
-        assert result.symbols[0].name == "Authenticate"
-        assert result.symbols[0].return_type == "(*User, error)"
-
-
-class TestDesignPatternDetection:
-    def test_detect_repository_pattern(self):
-        code = """
-        export class ProjectRepository {
-          constructor(private prisma: PrismaClient) {}
-
-          async findById(id: string): Promise<Project | null> {
-            return this.prisma.project.findUnique({ where: { id } });
-          }
-
-          async create(data: CreateProjectInput): Promise<Project> {
-            return this.prisma.project.create({ data });
-          }
-        }
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        patterns = [p for p in result.patterns if p.category == "architectural"]
-        assert any(p.name == "Repository Pattern" for p in patterns)
-
-    def test_detect_middleware_pattern(self):
-        code = """
-        export function authMiddleware(req, res, next) {
-          const token = req.headers.authorization?.split(' ')[1];
-          if (!token) return res.status(401).json({ error: 'No token' });
-          try {
-            req.user = jwt.verify(token, SECRET);
-            next();
-          } catch {
-            res.status(401).json({ error: 'Invalid token' });
-          }
-        }
-        """
-        result = parse_file(code, SupportedLanguage.TYPESCRIPT)
-
-        patterns = [p for p in result.patterns if p.category == "behavioral"]
-        assert any(p.name == "Middleware Pattern" for p in patterns)
-```
-
-### 5.2 Module Decomposition Tests
-
-```python
-# tests/unit/module_decomposition/test_decomposer.py
-
-class TestModuleDecomposition:
-    def test_decompose_by_directory_structure(self, sample_repo):
-        modules = decompose_modules(sample_repo)
-
-        # Should identify auth module
-        auth_modules = [m for m in modules if 'auth' in m.name.lower()]
-        assert len(auth_modules) >= 1
-        assert auth_modules[0].module_type in ('middleware', 'service')
-
-    def test_decompose_by_import_graph(self, sample_repo):
-        modules = decompose_modules(sample_repo)
-
-        # Modules should have dependency edges
-        assert len(modules) > 0
-        for module in modules:
-            assert hasattr(module, 'coupling_score')
-            assert 0.0 <= module.coupling_score <= 1.0
-
-    def test_classify_module_types(self, sample_repo):
-        modules = decompose_modules(sample_repo)
-
-        type_counts = {}
-        for m in modules:
-            type_counts[m.module_type] = type_counts.get(m.module_type, 0) + 1
-
-        # Should have at least one service and one config
-        assert type_counts.get('service', 0) >= 1
-        assert type_counts.get('config', 0) >= 1
-
-    def test_generate_purpose_summary(self, auth_module):
-        summary = generate_purpose_summary(auth_module)
-
-        assert len(summary) > 0
-        assert len(summary) <= 200  # Concise
-        assert 'auth' in summary.lower() or 'authentication' in summary.lower()
-```
-
----
-
-## 6. Retrieval Engine
-
-### 6.1 Unit Tests
-
-```python
-# tests/unit/retrieval/test_hybrid_retrieval.py
-
-class TestHybridRetriever:
-    def test_dense_retrieval_returns_semantic_matches(self):
-        retriever = HybridRetriever(dense_only=True)
-        results = retriever.search(
-            "How does authentication work?",
-            repo_id="test-repo"
-        )
-
-        assert len(results) > 0
-        assert results[0].dense_score > 0.5
-        # Top results should be auth-related
-        auth_files = ['auth', 'login', 'jwt', 'token', 'session']
-        assert any(
-            auth_keyword in results[0].file_path.lower()
-            for auth_keyword in auth_files
-        )
-
-    def test_sparse_retrieval_returns_exact_matches(self):
-        retriever = HybridRetriever(sparse_only=True)
-        results = retriever.search(
-            "JwtGuard middleware",
-            repo_id="test-repo"
-        )
-
-        assert len(results) > 0
-        # Should find the exact function/class name
-        assert any('JwtGuard' in r.content for r in results[:5])
-
-    def test_hybrid_outperforms_individual(self):
-        dense_retriever = HybridRetriever(dense_only=True)
-        sparse_retriever = HybridRetriever(sparse_only=True)
-        hybrid_retriever = HybridRetriever(hybrid=True)
-
-        queries = load_test_queries(category="security")
-        dense_precision = evaluate_precision(dense_retriever, queries)
-        sparse_precision = evaluate_precision(sparse_retriever, queries)
-        hybrid_precision = evaluate_precision(hybrid_retriever, queries)
-
-        assert hybrid_precision >= max(dense_precision, sparse_precision)
-
-    def test_rrf_fusion_boosts_results_in_both_lists(self):
-        retriever = HybridRetriever(hybrid=True)
-        results = retriever.search("refresh token rotation", repo_id="test-repo")
-
-        # Results that appear in both dense and sparse should rank higher
-        for i, result in enumerate(results[:5]):
-            if result.dense_score > 0 and result.sparse_score > 0:
-                # Combined score should be higher than individual
-                assert result.fused_score > max(result.dense_score, result.sparse_score)
-
-    def test_reranker_improves_top_k_precision(self):
-        retriever_no_rerank = HybridRetriever(hybrid=True, rerank=False)
-        retriever_with_rerank = HybridRetriever(hybrid=True, rerank=True)
-
-        queries = load_test_queries()
-        precision_no_rerank = evaluate_precision_at_5(retriever_no_rerank, queries)
-        precision_with_rerank = evaluate_precision_at_5(retriever_with_rerank, queries)
-
-        assert precision_with_rerank >= precision_no_rerank
-
-    def test_handles_empty_repository(self):
-        retriever = HybridRetriever()
-        results = retriever.search("anything", repo_id="empty-repo")
-        assert results == []
-
-    def test_handles_query_with_no_relevant_results(self):
-        retriever = HybridRetriever()
-        results = retriever.search(
-            "quantum computing optimization",
-            repo_id="portfolio-api"  # No quantum computing code
-        )
-        # Should return results but with low scores
-        for result in results[:3]:
-            assert result.fused_score < 0.3
-
-
-class TestChunking:
-    def test_ast_aware_chunking_respects_function_boundaries(self):
-        code = """
-        function auth() { /* 20 lines */ }
-        function login() { /* 30 lines */ }
-        function logout() { /* 10 lines */ }
-        """
-        chunks = ast_aware_chunk(code, "auth.ts", SupportedLanguage.TYPESCRIPT)
-
-        # Each function should be its own chunk
-        assert len(chunks) == 3
-        assert chunks[0].chunk_type == "function"
-        assert chunks[0].start_line > 0
-
-    def test_chunk_token_count_within_limit(self):
-        large_file = read_test_file("large-module.ts")
-        chunks = chunk_file(large_file, "module.ts", max_tokens=1000)
-
-        for chunk in chunks:
-            assert chunk.token_count <= 1000
-
-    def test_chunks_preserve_metadata(self):
-        code = "export async function processPayment(amount: number): Promise<Result> {}"
-        chunks = chunk_file(code, "payments.ts", SupportedLanguage.TYPESCRIPT)
-
-        assert chunks[0].symbol_name == "processPayment"
-        assert chunks[0].file_path == "payments.ts"
-        assert chunks[0].chunk_type == "function"
-```
-
-### 6.2 Integration Tests
-
-```python
-# tests/integration/retrieval/test_retrieval_api.py
-
-class TestRetrievalAPI:
-    @pytest.mark.integration
-    def test_retrieve_via_api(self, client, auth_headers, analyzed_repo):
-        res = client.get(
-            f"/v1/repos/{analyzed_repo.id}/retrieval/search",
-            query_string={"q": "authentication middleware"},
-            headers=auth_headers
-        )
-
-        assert res.status_code == 200
-        assert len(res.json["data"]["results"]) > 0
-        assert res.json["data"]["results"][0]["filePath"] is not None
-        assert res.json["data"]["results"][0]["fusedScore"] > 0
-
-    @pytest.mark.integration
-    def test_retrieval_respects_repo_access_control(self, client, auth_headers):
-        other_user_repo = create_repo_for_other_user()
-
-        res = client.get(
-            f"/v1/repos/{other_user_repo.id}/retrieval/search",
-            query_string={"q": "anything"},
-            headers=auth_headers
-        )
-
-        assert res.status_code == 403
-```
-
----
-
-## 7. Generation Service
-
-### 7.1 Unit Tests
-
-```python
-# tests/unit/generation/test_answer_generator.py
-
-class TestAnswerGenerator:
-    def test_generates_answer_with_citations(self, mock_retrieval_results):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="How does authentication work?",
-            context=mock_retrieval_results,
-            citation_required=True
-        )
-
-        assert len(answer.content) > 0
-        assert len(answer.citations) > 0
-        assert answer.citations[0].file_path is not None
-        assert answer.citations[0].start_line > 0
-
-    def test_citations_reference_existing_files(self, mock_retrieval_results):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="How does authentication work?",
-            context=mock_retrieval_results,
-            citation_required=True
-        )
-
-        for citation in answer.citations:
-            assert file_exists(citation.file_path), \
-                f"Citation references non-existent file: {citation.file_path}"
-
-    def test_answer_is_faithful_to_context(self, mock_retrieval_results):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="How does authentication work?",
-            context=mock_retrieval_results,
-            citation_required=True
-        )
-
-        faithfulness = evaluate_faithfulness(answer.content, mock_retrieval_results)
-        assert faithfulness >= 0.85
-
-    def test_generates_structured_interview_answer(self, mock_retrieval_results):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="How does authentication work?",
-            context=mock_retrieval_results,
-            format="interview_ready"
-        )
-
-        # Should have clear structure
-        assert "##" in answer.content or "**" in answer.content  # Markdown formatting
-        assert len(answer.content) >= 100  # Substantive answer
-
-    def test_generates_concise_elevator_pitch(self, mock_retrieval_results):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="Give me a 30-second summary of the auth system",
-            context=mock_retrieval_results,
-            format="concise"
-        )
-
-        # Should be short enough for 30-second delivery
-        word_count = len(answer.content.split())
-        assert word_count <= 100
-
-    def test_handles_context_with_no_relevant_chunks(self):
-        generator = AnswerGenerator()
-        answer = generator.generate(
-            query="How does the quantum entanglement module work?",
-            context=[],
-            citation_required=True
-        )
-
-        # Should indicate no relevant context found
-        assert "no relevant" in answer.content.lower() or "not found" in answer.content.lower()
-        assert len(answer.citations) == 0
-
-
-class TestFollowUpGenerator:
-    def test_generates_contextual_follow_ups(self, mock_answer):
-        generator = FollowUpGenerator()
-        follow_ups = generator.generate(mock_answer, context="mid")
-
-        assert len(follow_ups) >= 2
-        assert len(follow_ups) <= 5
-        # Follow-ups should be questions
-        assert all(q.endswith("?") for q in follow_ups)
-
-    def test_follow_ups_target_weak_areas(self, weak_answer):
-        generator = FollowUpGenerator()
-        follow_ups = generator.generate(weak_answer, context="senior")
-
-        # Should probe areas the answer didn't cover well
-        assert any("why" in q.lower() or "trade" in q.lower() for q in follow_ups)
-```
-
----
-
-## 8. Chat Interface
-
-### 8.1 Unit Tests
-
-```typescript
-// tests/unit/chat/chat-service.test.ts
-
-describe('ChatService', () => {
-  describe('sendMessage', () => {
-    it('should create assistant message with citations', async () => {
-      const response = await chatService.sendMessage({
-        sessionId: 'chat_123',
-        content: 'How does the auth middleware work?',
-        userId: 'usr_123'
-      });
-
-      expect(response.role).toBe('assistant');
-      expect(response.content.length).toBeGreaterThan(0);
-      expect(response.citations.length).toBeGreaterThan(0);
-      expect(response.modelUsed).toBeDefined();
-    });
-
-    it('should enforce daily message limit for free tier', async () => {
-      // Set up user at limit
-      for (let i = 0; i < 15; i++) {
-        await chatService.sendMessage({
-          sessionId: 'chat_123',
-          content: `Message ${i}`,
-          userId: 'usr_free'
-        });
-      }
-
-      await expect(
-        chatService.sendMessage({
-          sessionId: 'chat_123',
-          content: 'One more message',
-          userId: 'usr_free'
-        })
-      ).rejects.toThrow('DAILY_LIMIT_EXCEEDED');
-    });
-
-    it('should track token usage per message', async () => {
-      const response = await chatService.sendMessage({
-        sessionId: 'chat_123',
-        content: 'Explain the architecture',
-        userId: 'usr_123'
-      });
-
-      expect(response.tokensUsed).toBeGreaterThan(0);
-    });
-
-    it('should maintain conversation context', async () => {
-      await chatService.sendMessage({
-        sessionId: 'chat_123',
-        content: 'How does authentication work?',
-        userId: 'usr_123'
-      });
-
-      const response = await chatService.sendMessage({
-        sessionId: 'chat_123',
-        content: 'What about token refresh?',
-        userId: 'usr_123'
-      });
-
-      // Follow-up should reference previous context
-      expect(response.content.toLowerCase()).toContain('refresh');
-    });
-
-    it('should handle streaming responses', async () => {
-      const chunks: string[] = [];
-
-      await chatService.sendMessageStream({
-        sessionId: 'chat_123',
-        content: 'Explain the architecture',
-        userId: 'usr_123',
-        onChunk: (chunk) => chunks.push(chunk)
-      });
-
-      expect(chunks.length).toBeGreaterThan(0);
-      const fullResponse = chunks.join('');
-      expect(fullResponse.length).toBeGreaterThan(0);
-    });
-  });
-});
-```
-
-### 8.2 Integration Tests
-
-```typescript
-// tests/integration/chat/chat-api.test.ts
-
-describe('Chat API', () => {
-  describe('POST /repos/:repoId/chat/sessions', () => {
-    it('should create a new chat session', async () => {
-      const res = await request(app)
-        .post(`/v1/repos/${repoId}/chat/sessions`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ mode: 'general', title: 'Auth questions' });
-
-      expect(res.status).toBe(201);
-      expect(res.body.data.id).toBeDefined();
-      expect(res.body.data.mode).toBe('general');
-      expect(res.body.data.messageCount).toBe(0);
-    });
-
-    it('should create mock interview session', async () => {
-      const res = await request(app)
-        .post(`/v1/repos/${repoId}/chat/sessions`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ mode: 'mock_interview' });
-
-      expect(res.body.data.mode).toBe('mock_interview');
-    });
-  });
-
-  describe('WebSocket Chat', () => {
-    it('should stream response chunks', async () => {
-      const socket = createAuthenticatedSocket(token);
-      const chunks = [];
-
-      socket.emit('chat:send', {
-        sessionId: chatSessionId,
-        content: 'How does authentication work?'
-      });
-
-      await new Promise((resolve) => {
-        socket.on('chat:stream:chunk', (data) => {
-          chunks.push(data.delta);
-        });
-        socket.on('chat:stream:end', () => resolve(undefined));
-      });
-
-      expect(chunks.length).toBeGreaterThan(0);
-      const fullResponse = chunks.join('');
-      expect(fullResponse.length).toBeGreaterThan(0);
-    });
-
-    it('should include citations in stream end event', async () => {
-      const socket = createAuthenticatedSocket(token);
-      let endData;
-
-      socket.emit('chat:send', {
-        sessionId: chatSessionId,
-        content: 'How does authentication work?'
-      });
-
-      await new Promise((resolve) => {
-        socket.on('chat:stream:end', (data) => {
-          endData = data;
-          resolve(undefined);
-        });
-      });
-
-      expect(endData.totalTokens).toBeGreaterThan(0);
-      expect(endData.modelUsed).toBeDefined();
-    });
-
-    it('should reject unauthenticated connections', async () => {
-      const socket = io('ws://localhost:8080');
-
-      await new Promise((resolve) => {
-        socket.on('connect_error', (err) => {
-          expect(err.message).toContain('Unauthorized');
-          resolve(undefined);
-        });
-      });
-    });
-  });
-});
-```
-
----
-
-## 9. Mock Interview Simulator
-
-### 9.1 Unit Tests
-
-```python
-# tests/unit/mock_interview/test_interview_engine.py
-
-class TestMockInterviewEngine:
-    def test_generates_sequential_questions(self):
-        engine = MockInterviewEngine(persona="rigorous_hiring_manager")
-        session = engine.start_session(difficulty="mid", question_count=5)
-
-        q1 = engine.get_next_question(session.id)
-        assert q1.question_number == 1
-        assert q1.category is not None
-
-        q2 = engine.get_next_question(session.id)
-        assert q2.question_number == 2
-        assert q2.question_number > q1.question_number  # Progressive
-
-    def test_evaluates_answer_with_scores(self):
-        engine = MockInterviewEngine()
-        session = engine.start_session(difficulty="mid")
-        question = engine.get_next_question(session.id)
-
-        evaluation = engine.evaluate_answer(
-            session.id,
-            question.id,
-            "The auth middleware validates JWT tokens by extracting the Bearer token..."
-        )
-
-        assert 0 <= evaluation.score.overall <= 100
-        assert 0 <= evaluation.score.clarity <= 100
-        assert 0 <= evaluation.score.depth <= 100
-        assert 0 <= evaluation.score.specificity <= 100
-        assert len(evaluation.feedback) > 0
-
-    def test_coaching_break_on_poor_answer(self):
-        engine = MockInterviewEngine()
-        session = engine.start_session(difficulty="senior")
-        question = engine.get_next_question(session.id)
-
-        # Submit very poor answer
-        evaluation = engine.evaluate_answer(session.id, question.id, "I don't know")
-
-        if evaluation.score.overall < 40:
-            coaching = engine.get_coaching_break(session.id)
-            assert coaching.note is not None
-            assert len(coaching.relevant_code) > 0
-
-    def test_generates_comprehensive_report(self):
-        engine = MockInterviewEngine()
-        session = engine.start_session(difficulty="mid", question_count=5)
-
-        for _ in range(5):
-            question = engine.get_next_question(session.id)
-            engine.evaluate_answer(session.id, question.id, "Sample answer")
-
-        report = engine.complete_session(session.id)
-
-        assert report.overall_score > 0
-        assert len(report.strengths) > 0
-        assert len(report.weaknesses) > 0
-        assert len(report.study_recommendations) > 0
-        assert report.time_spent_sec > 0
-
-    def test_persona_affects_question_style(self):
-        friendly = MockInterviewEngine(persona="friendly_senior")
-        strict = MockInterviewEngine(persona="rigorous_hiring_manager")
-
-        q_friendly = friendly.get_next_question(friendly.start_session().id)
-        q_strict = strict.get_next_question(strict.start_session().id)
-
-        # Strict persona should have more adversarial questions
-        # This is a heuristic check
-        assert q_friendly.question_text != q_strict.question_text
-
-    def test_difficulty_affects_question_complexity(self):
-        easy_engine = MockInterviewEngine()
-        hard_engine = MockInterviewEngine()
-
-        easy_session = easy_engine.start_session(difficulty="junior")
-        hard_session = hard_engine.start_session(difficulty="senior")
-
-        q_easy = easy_engine.get_next_question(easy_session.id)
-        q_hard = hard_engine.get_next_question(hard_session.id)
-
-        # Senior questions should generally be longer/more complex
-        # or cover more advanced topics
-        assert q_easy.question_text != q_hard.question_text
-
-    def test_session_timeout(self):
-        engine = MockInterviewEngine(time_limit_minutes=1)
-        session = engine.start_session(difficulty="mid", question_count=10)
-
-        # Simulate time passing
-        session.started_at = datetime.utcnow() - timedelta(minutes=2)
-
-        with pytest.raises(SessionTimeoutError):
-            engine.get_next_question(session.id)
-```
-
----
-
-## 10. Billing & Subscriptions
-
-### 10.1 Unit Tests
-
-```typescript
-// tests/unit/billing/subscription.test.ts
-
-describe('Subscription Service', () => {
-  describe('checkQuota', () => {
-    it('should allow usage within quota', async () => {
-      const quota = await checkQuota('usr_123', 'chat_messages');
-
-      expect(quota.allowed).toBe(true);
-      expect(quota.remaining).toBeGreaterThan(0);
-    });
-
-    it('should block usage at quota limit', async () => {
-      // Set up user at limit
-      await setUserUsage('usr_free', 'chat_messages', 15);
-
-      const quota = await checkQuota('usr_free', 'chat_messages');
-
-      expect(quota.allowed).toBe(false);
-      expect(quota.remaining).toBe(0);
-      expect(quota.resetsAt).toBeDefined();
-    });
-
-    it('should reset quota on new billing period', async () => {
-      await setUserUsage('usr_123', 'chat_messages', 500);
-      await advanceToNextBillingPeriod('usr_123');
-
-      const quota = await checkQuota('usr_123', 'chat_messages');
-
-      expect(quota.allowed).toBe(true);
-      expect(quota.remaining).toBe(500);
-    });
-  });
-
-  describe('Stripe Webhook Handling', () => {
-    it('should activate subscription on checkout.session.completed', async () => {
-      const event = createStripeEvent('checkout.session.completed', {
-        customer: 'cus_123',
-        subscription: 'sub_123',
-        metadata: { userId: 'usr_123', plan: 'pro' }
-      });
-
-      await handleStripeWebhook(event);
-
-      const user = await getUser('usr_123');
-      expect(user.planTier).toBe('pro');
-    });
-
-    it('should downgrade on subscription deleted', async () => {
-      await setUserPlan('usr_123', 'pro');
-      const event = createStripeEvent('customer.subscription.deleted', {
-        id: 'sub_123',
-        customer: 'cus_123'
-      });
-
-      await handleStripeWebhook(event);
-
-      const user = await getUser('usr_123');
-      expect(user.planTier).toBe('free');
-    });
-
-    it('should update quotas on subscription updated', async () => {
-      const event = createStripeEvent('customer.subscription.updated', {
-        id: 'sub_123',
-        customer: 'cus_123',
-        items: { data: [{ price: { id: 'price_pro_yearly' } }] }
-      });
-
-      await handleStripeWebhook(event);
-
-      const sub = await getSubscription('usr_123');
-      expect(sub.plan_tier).toBe('pro');
-      expect(sub.billing_cycle).toBe('yearly');
-    });
-
-    it('should handle webhook signature verification', async () => {
-      const invalidEvent = { type: 'checkout.session.completed', data: {} };
-
-      await expect(
-        handleStripeWebhook(invalidEvent, 'invalid-signature')
-      ).rejects.toThrow('INVALID_WEBHOOK_SIGNATURE');
-    });
-  });
-});
-```
-
-### 10.2 Integration Tests
-
-```typescript
-// tests/integration/billing/billing-api.test.ts
-
-describe('Billing API', () => {
-  describe('POST /billing/checkout', () => {
-    it('should create Stripe checkout session', async () => {
-      const res = await request(app)
-        .post('/v1/billing/checkout')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ plan: 'pro', billingCycle: 'monthly' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.checkoutUrl).toContain('stripe.com');
-      expect(res.body.data.sessionId).toBeDefined();
-    });
-
-    it('should reject invalid plan', async () => {
-      const res = await request(app)
-        .post('/v1/billing/checkout')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ plan: 'enterprise' });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
-    });
-  });
-
-  describe('GET /usage/summary', () => {
-    it('should return current usage data', async () => {
-      const res = await request(app)
-        .get('/v1/usage/summary')
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.usage.reposConnected).toBeDefined();
-      expect(res.body.data.usage.chatMessages).toBeDefined();
-      expect(res.body.data.usage.analysisJobs).toBeDefined();
-    });
-  });
-});
-```
-
----
-
-## 11. E2E Tests
-
-### 11.1 User Workflow Tests (Playwright)
-
-```typescript
-// tests/e2e/workflows/complete-interview-prep.spec.ts
-
-import { test, expect } from '@playwright/test';
-
-test.describe('Complete Interview Preparation Workflow', () => {
-  test('should connect repo, analyze, and practice interview', async ({ page }) => {
-    // Step 1: Login
-    await page.goto('http://localhost:3000');
-    await page.click('[data-testid="github-login"]');
-    await page.waitForURL('**/dashboard');
-
-    // Step 2: Connect repository
-    await page.click('[data-testid="connect-repo"]');
-    await page.fill('[data-testid="repo-url"]', 'test-user/portfolio-api');
-    await page.click('[data-testid="connect-button"]');
-
-    // Verify repo appears in list
-    await expect(page.locator('[data-testid="repo-card"]'))
-      .toContainText('portfolio-api');
-
-    // Step 3: Trigger analysis
-    await page.click('[data-testid="repo-card"]');
-    await page.click('[data-testid="analyze-button"]');
-
-    // Wait for analysis to complete
-    await expect(page.locator('[data-testid="analysis-status"]'))
-      .toContainText('completed', { timeout: 120000 });
-
-    // Step 4: View architecture overview
-    await page.click('[data-testid="architecture-tab"]');
-    await expect(page.locator('[data-testid="architecture-content"]'))
-      .not.toBeEmpty();
-
-    // Step 5: Browse questions
-    await page.click('[data-testid="questions-tab"]');
-    await expect(page.locator('[data-testid="question-list"]'))
-      .not.toBeEmpty();
-
-    // Step 6: Start chat
-    await page.click('[data-testid="chat-tab"]');
-    await page.fill('[data-testid="chat-input"]', 'How does authentication work?');
-    await page.click('[data-testid="send-button"]');
-
-    // Wait for response
-    await expect(page.locator('[data-testid="assistant-message"]').last())
-      .not.toBeEmpty({ timeout: 30000 });
-
-    // Verify citations are present
-    await expect(page.locator('[data-testid="citation"]').first())
-      .toBeVisible();
-
-    // Step 7: Start mock interview
-    await page.click('[data-testid="mock-interview-tab"]');
-    await page.selectOption('[data-testid="persona-select"]', 'rigorous_hiring_manager');
-    await page.selectOption('[data-testid="difficulty-select"]', 'mid');
-    await page.click('[data-testid="start-interview"]');
-
-    // Answer first question
-    await expect(page.locator('[data-testid="interview-question"]'))
-      .not.toBeEmpty();
-    await page.fill('[data-testid="interview-answer"]',
-      'The project uses a layered architecture with Express middleware...');
-    await page.click('[data-testid="submit-answer"]');
-
-    // Verify scoring
-    await expect(page.locator('[data-testid="answer-score"]'))
-      .toBeVisible();
-
-    // Complete interview
-    await page.click('[data-testid="complete-interview"]');
-
-    // Verify report
-    await expect(page.locator('[data-testid="interview-report"]'))
-      .toBeVisible();
-    await expect(page.locator('[data-testid="strengths-list"]'))
-      .not.toBeEmpty();
-    await expect(page.locator('[data-testid="study-recommendations"]'))
-      .not.toBeEmpty();
-  });
-});
-```
-
-### 11.2 Cross-Browser Tests
-
-```typescript
-// tests/e2e/cross-browser/basic-functionality.spec.ts
-
-import { test, expect } from '@playwright/test';
-
-const browsers = ['chromium', 'firefox', 'webkit'];
-
-test.describe('Cross-Browser Compatibility', () => {
-  browsers.forEach((browserName) => {
-    test(`basic functionality works in ${browserName}`, async ({ page }) => {
-      await page.goto('http://localhost:3000');
-
-      // Login page renders
-      await expect(page.locator('[data-testid="github-login"]')).toBeVisible();
-
-      // After login, dashboard renders
-      await login(page);
-      await expect(page.locator('[data-testid="dashboard"]')).toBeVisible();
-
-      // Navigation works
-      await page.click('[data-testid="nav-repos"]');
-      await expect(page.locator('[data-testid="repos-page"]')).toBeVisible();
-    });
-  });
-});
-```
-
----
-
-## 12. Security Tests
-
-```python
-# tests/security/test_security.py
-
-class TestSecurity:
-    def test_sql_injection_prevention(self, client):
-        malicious_inputs = [
-            "'; DROP TABLE users; --",
-            "1' OR '1'='1",
-            "admin'--",
-            "1; DELETE FROM repositories WHERE 1=1",
-        ]
-
-        for payload in malicious_inputs:
-            res = client.get(
-                f"/v1/repos/{payload}",
-                headers={"Authorization": f"Bearer {valid_token}"}
-            )
-            # Should return 400 or 404, not 500
-            assert res.status_code in (400, 404)
-
-    def test_xss_prevention(self, client, auth_headers):
-        xss_payloads = [
-            "<script>alert('xss')</script>",
-            "<img src=x onerror=alert(1)>",
-            "javascript:alert(1)",
-        ]
-
-        for payload in xss_payloads:
-            res = client.post(
-                "/v1/chat/sessions",
-                json={"title": payload, "mode": "general"},
-                headers=auth_headers
-            )
-            if res.status_code == 201:
-                # Verify the payload is escaped in the response
-                assert "<script>" not in res.json["data"]["title"]
-                assert "javascript:" not in res.json["data"]["title"]
-
-    def test_cors_headers(self, client):
-        res = client.options(
-            "/v1/repos",
-            headers={
-                "Origin": "https://vibecoder.com",
-                "Access-Control-Request-Method": "GET"
-            }
-        )
-        assert res.headers.get("Access-Control-Allow-Origin") == "https://vibecoder.com"
-
-        # Should block unauthorized origins
-        res = client.options(
-            "/v1/repos",
-            headers={
-                "Origin": "https://evil.com",
-                "Access-Control-Request-Method": "GET"
-            }
-        )
-        assert "evil.com" not in res.headers.get("Access-Control-Allow-Origin", "")
-
-    def test_rate_limiting_headers(self, client, auth_headers):
-        res = client.get("/v1/repos", headers=auth_headers)
-
-        assert "X-RateLimit-Limit" in res.headers
-        assert "X-RateLimit-Remaining" in res.headers
-        assert "X-RateLimit-Reset" in res.headers
-
-    def test_github_token_not_exposed_in_responses(self, client, auth_headers):
-        res = client.get("/v1/users/me", headers=auth_headers)
-
-        response_text = str(res.json)
-        assert "gho_" not in response_text  # GitHub OAuth token prefix
-        assert "github_token" not in response_text
-
-    def test_refresh_token_not_in_url(self, client):
-        # Refresh token should only be in request body, never in URL
-        res = client.get("/v1/auth/refresh?token=some_token")
-        assert res.status_code == 405  # Method not allowed
-
-    def test_content_security_policy(self, client):
-        res = client.get("/")
-        csp = res.headers.get("Content-Security-Policy", "")
-
-        assert "default-src 'self'" in csp
-        assert "script-src 'self'" in csp
-        assert "unsafe-inline" not in csp
-
-    def test_sensitive_data_not_in_logs(self, caplog):
-        with caplog.at_level(logging.INFO):
-            process_login(email="user@test.com", password="secretsauce123")
-
-        for record in caplog.records:
-            assert "secretsauce123" not in record.message
-            assert "password" not in record.message.lower() or "hashed" in record.message.lower()
-
-    def test_concurrent_session_limit(self, client):
-        # Create multiple sessions for the same user
-        sessions = []
-        for i in range(5):
-            res = client.post(
-                "/v1/repos/test-repo/chat/sessions",
-                json={"mode": "general"},
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            sessions.append(res.json["data"]["id"])
-
-        # Should allow up to a reasonable limit
-        assert len(sessions) == 5
-
-        # Excessive sessions should be handled gracefully
-        for i in range(10):
-            res = client.post(
-                "/v1/repos/test-repo/chat/sessions",
-                json={"mode": "general"},
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            # Should either succeed or return 429, not 500
-            assert res.status_code in (201, 429)
-```
-
----
-
-## 13. Error Handling Tests
-
-```typescript
-// tests/integration/error-handling.test.ts
-
-describe('Error Handling', () => {
-  it('should return structured error for invalid JSON', async () => {
-    const res = await request(app)
-      .post('/v1/repos/connect')
-      .set('Content-Type', 'application/json')
-      .set('Authorization', `Bearer ${token}`)
-      .send('{"invalid json');
-
-    expect(res.status).toBe(400);
-    expect(res.body.ok).toBe(false);
-    expect(res.body.error.code).toBe('INVALID_JSON');
-  });
-
-  it('should handle missing required fields', async () => {
-    const res = await request(app)
-      .post('/v1/repos/connect')
-      .set('Authorization', `Bearer ${token}`)
-      .send({}); // Missing fullName
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.details).toBeDefined();
-    expect(res.body.error.details[0].field).toBe('fullName');
-  });
-
-  it('should handle invalid UUID parameters', async () => {
-    const res = await request(app)
-      .get('/v1/repos/not-a-uuid')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('should handle database connection failure gracefully', async () => {
-    // Temporarily break database connection
-    await breakDatabaseConnection();
-
-    const res = await request(app)
-      .get('/v1/repos')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
-    expect(res.body.error.message).not.toContain('connection string');
-
-    await restoreDatabaseConnection();
-  });
-
-  it('should handle OpenAI API failure gracefully', async () => {
-    mockOpenAIFailure('rate_limit_exceeded');
-
-    const res = await request(app)
-      .post(`/v1/repos/${repoId}/chat/sessions`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ mode: 'general' });
-
-    // Should create session but indicate service degradation
-    expect(res.status).toBe(201);
-    // Next chat message should return meaningful error
-    const chatRes = await request(app)
-      .post(`/v1/chat/sessions/${res.body.data.id}/messages`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ content: 'Hello' });
-
-    expect(chatRes.status).toBe(503);
-    expect(chatRes.body.error.message).toContain('temporarily unavailable');
-  });
-
-  it('should include request ID in all responses', async () => {
-    const res = await request(app)
-      .get('/v1/repos')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.body.meta.requestId).toBeDefined();
-    expect(res.body.meta.requestId).toMatch(/^req_/);
-  });
-
-  it('should not leak stack traces in production', async () => {
-    process.env.NODE_ENV = 'production';
-
-    const res = await request(app)
-      .get('/v1/repos/invalid-id')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.body.error.stack).toBeUndefined();
-    expect(res.body.error.trace).toBeUndefined();
-
-    process.env.NODE_ENV = 'test';
-  });
-});
-```
-
----
-
-## 14. Test Data Management
-
-### 14.1 Fixtures
-
-```typescript
-// tests/fixtures/index.ts
-
-export const fixtures = {
-  users: {
-    free: {
-      id: 'usr_test_free',
-      github_id: 100001,
-      email: 'free@test.com',
-      username: 'free-user',
-      plan_tier: 'free',
-    },
-    pro: {
-      id: 'usr_test_pro',
-      github_id: 100002,
-      email: 'pro@test.com',
-      username: 'pro-user',
-      plan_tier: 'pro',
-    },
-    institutional: {
-      id: 'usr_test_inst',
-      github_id: 100003,
-      email: 'inst@test.com',
-      username: 'inst-user',
-      plan_tier: 'institutional',
-    },
-  },
-
-  repositories: {
-    small: {
-      id: 'repo_test_small',
-      full_name: 'test-user/small-project',
-      language_primary: 'TypeScript',
-      total_files: 15,
-      total_lines: 800,
-    },
-    medium: {
-      id: 'repo_test_medium',
-      full_name: 'test-user/portfolio-api',
-      language_primary: 'TypeScript',
-      total_files: 342,
-      total_lines: 28400,
-    },
-    large: {
-      id: 'repo_test_large',
-      full_name: 'test-user/microservices',
-      language_primary: 'Go',
-      total_files: 1200,
-      total_lines: 95000,
-    },
-  },
-
-  analysisJobs: {
-    completed: {
-      id: 'job_test_completed',
-      status: 'completed',
-      stats: {
-        filesParsed: 318,
-        symbolsExtracted: 1847,
-        chunksCreated: 4521,
-        embeddingsGenerated: 4521,
-      },
-    },
-    inProgress: {
-      id: 'job_test_progress',
-      status: 'parsing',
-    },
-    failed: {
-      id: 'job_test_failed',
-      status: 'failed',
-      error_message: 'UNSUPPORTED_LANGUAGE',
-    },
-  },
-
-  chatSessions: {
-    general: {
-      id: 'chat_test_general',
-      mode: 'general',
-    },
-    mockInterview: {
-      id: 'chat_test_mock',
-      mode: 'mock_interview',
-    },
-  },
-};
-```
-
-### 14.2 Test Helpers
-
-```typescript
-// tests/helpers/index.ts
-
-export async function createTestUser(overrides?: Partial<User>): Promise<TestUser> {
-  const userData = { ...fixtures.users.free, ...overrides };
-  const user = await db.user.create({ data: userData });
-  const token = generateAccessToken({ userId: user.id, plan: user.plan_tier });
-  return { ...user, token };
-}
-
-export async function createTestRepo(userId: string, overrides?: Partial<Repository>): Promise<Repository> {
-  const repoData = { ...fixtures.repositories.medium, user_id: userId, ...overrides };
-  return db.repository.create({ data: repoData });
-}
-
-export async function createAnalyzedRepo(userId: string): Promise<{ repo: Repository; job: AnalysisJob }> {
-  const repo = await createTestRepo(userId);
-  const job = await db.analysisJob.create({
-    data: {
-      repo_id: repo.id,
-      status: 'completed',
-      stats: fixtures.analysisJobs.completed.stats,
-    }
-  });
-  return { repo, job };
-}
-
-export async function waitForAnalysisCompletion(jobId: string, timeout = 30000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    const job = await db.analysisJob.findUnique({ where: { id: jobId } });
-    if (job.status === 'completed' || job.status === 'failed') return;
-    await sleep(500);
-  }
-  throw new Error(`Analysis job ${jobId} did not complete within ${timeout}ms`);
-}
-```
-
----
-
-## 15. Test Execution & Reporting
-
-### 15.1 Run Commands
-
-```bash
-# Unit tests (all)
-pnpm test:unit
-
-# Unit tests (specific module)
-pnpm test:unit -- --testPathPattern=auth
-
-# Integration tests
-pnpm test:integration
-
-# Python unit tests
-cd packages/retrieval && pytest tests/unit/ -v
-cd packages/ast-parser && cargo test
-
-# E2E tests
-pnpm test:e2e
-
-# Security tests
-pnpm test:security
-
-# Full suite with coverage
-pnpm test:coverage
-
-# Watch mode for development
-pnpm test:watch
-```
-
-### 15.2 Coverage Targets
-
-| Module | Line Coverage | Branch Coverage | Function Coverage |
+| Category | Tool | Tests | Execution Time |
 |---|---|---|---|
-| Authentication | ≥ 95% | ≥ 90% | ≥ 95% |
-| Repository Management | ≥ 90% | ≥ 85% | ≥ 90% |
-| Analysis Pipeline | ≥ 85% | ≥ 80% | ≥ 85% |
-| Retrieval Engine | ≥ 90% | ≥ 85% | ≥ 90% |
-| Generation Service | ≥ 80% | ≥ 75% | ≥ 80% |
-| Chat Interface | ≥ 85% | ≥ 80% | ≥ 85% |
-| Mock Interview | ≥ 80% | ≥ 75% | ≥ 80% |
-| Billing | ≥ 90% | ≥ 85% | ≥ 90% |
-| **Overall** | **≥ 88%** | **≥ 83%** | **≥ 88%** |
+| Unit tests (TS) | Vitest | ~500 tests | < 2 min |
+| Unit tests (Rust) | cargo test | ~200 tests | < 1 min |
+| Unit tests (Python) | pytest | ~300 tests | < 2 min |
+| Integration tests | Testcontainers | ~100 tests | < 5 min |
+| API contract tests | Supertest + Jest | ~150 tests | < 3 min |
+| E2E critical path | Playwright | ~50 tests | < 10 min |
+| Linting | ESLint + Clippy + Ruff | Full codebase | < 1 min |
+| Type checking | tsc --noEmit | Full codebase | < 2 min |
+| **Total** | | **~1,350 tests** | **< 25 min** |
 
-### 15.3 CI Integration
+### 9.2 Nightly Regression (Extended)
 
-```yaml
-# .github/workflows/test.yml
-name: Test Suite
+| Category | Additional Coverage | Execution Time |
+|---|---|---|
+| Full E2E suite | ~200 tests across all features | ~30 min |
+| Performance benchmarks | Key metric regression checks | ~20 min |
+| Security scans | Dependency audit + SAST | ~15 min |
+| Visual regression | Screenshot comparison (Chromatic) | ~10 min |
+| Accessibility audit | axe-core automated checks | ~10 min |
+| **Total** | | **~85 min** |
 
-on: [push, pull_request]
+---
 
-jobs:
-  test-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
-      - uses: actions/setup-node@v4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:unit -- --coverage
-      - uses: codecov/codecov-action@v3
+## 10. Test Data Management
 
-  test-integration:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: vibecoder_test
-          POSTGRES_USER: vibecoder
-          POSTGRES_PASSWORD: test
-        ports: ["5432:5432"]
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-    steps:
-      - uses: actions/checkout@v4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:integration
-        env:
-          DATABASE_URL: postgresql://vibecoder:test@localhost:5432/vibecoder_test
-          REDIS_URL: redis://localhost:6379
+### 10.1 Reference Repositories
 
-  test-e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: pnpm install --frozen-lockfile
-      - run: docker compose up -d
-      - run: npx playwright install
-      - run: pnpm test:e2e
-      - uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: playwright-report
-          path: test-results/
+| Repository | Language | LOC | Purpose |
+|---|---|---|---|
+| `test-auth-service` | TypeScript | 2,500 | Auth flow testing |
+| `test-ecommerce-api` | Python | 8,000 | Multi-module architecture |
+| `test-microservices` | Go + TS | 25,000 | Polyglot, dependency graph |
+| `test-frontend-app` | React/TS | 5,000 | Component/page detection |
+| `test-cli-tool` | Rust | 3,000 | Non-Web project testing |
+
+### 10.2 Edge Case Repositories
+
+| Repository | Scenario | Why It Matters |
+|---|---|---|
+| `test-empty-repo` | Only README, no code | Graceful handling |
+| `test-huge-repo` | 50K LOC monorepo | Performance limits |
+| `test-binary-heavy` | 70% non-code files | Filtering accuracy |
+| `test-circular-deps` | Circular import chains | Dependency graph correctness |
+| `test-no-deps` | Zero external dependencies | Minimal analysis case |
+
+---
+
+## 11. Defect Management
+
+### 11.1 Severity Definitions
+
+| Severity | Definition | SLA |
+|---|---|---|
+| **S1 — Critical** | Data loss, security breach, complete service outage | Fix within 4 hours |
+| **S2 — High** | Core feature broken, no workaround available | Fix within 24 hours |
+| **S3 — Medium** | Feature degraded, workaround exists | Fix within 1 week |
+| **S4 — Low** | Cosmetic issue, minor UX inconvenience | Fix in next sprint |
+
+### 11.2 Bug Report Template
+
+```markdown
+## Bug Report
+
+**Title:** [Brief description]
+**Severity:** S1 / S2 / S3 / S4
+**Environment:** Dev / Staging / Production
+**Browser:** Chrome 120 / Firefox 121 / Safari 17
+
+### Steps to Reproduce
+1. ...
+2. ...
+3. ...
+
+### Expected Result
+What should happen.
+
+### Actual Result
+What actually happened.
+
+### Screenshots / Videos
+[Attach if applicable]
+
+### Logs / Error Messages
+[Attach relevant logs]
+
+### Additional Context
+- User plan tier: free / starter / pro
+- Repository size: ~X LOC
+- Analysis status: completed / in progress
 ```
 
 ---
 
-*This test plan ensures comprehensive coverage across all Vibe Coder features. Update test cases as new features are added and after every incident to prevent regression.*
+## 12. Testing Schedule & Milestones
+
+| Phase | Activities | Duration | Entry Criteria | Exit Criteria |
+|---|---|---|---|---|
+| **Sprint 0** | Test plan, environment setup, CI integration | 1 week | Requirements approved | Environments ready, CI passing |
+| **Alpha** | Core flow testing (auth, analysis, chat) | 2 weeks | Core features implemented | All P0 tests passing |
+| **Beta** | Full feature testing, integration, performance | 3 weeks | All features implemented | All P0+P1 tests passing, perf targets met |
+| **RC** | Security audit, accessibility, UAT | 2 weeks | Beta complete | No open S1/S2, all gates passing |
+| **GA** | Final regression, production smoke tests | 1 week | RC approved | Full regression green, monitoring active |
+
+---
+
+*This QA Test Plan should be reviewed and updated at the start of each sprint. Test cases should be automated wherever possible, with manual testing reserved for exploratory and usability scenarios.*

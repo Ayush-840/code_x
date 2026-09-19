@@ -1,0 +1,31 @@
+{
+  "name": "@vibe-coder/database",
+  "version": "0.1.0",
+  "main": "generated/index.js",
+  "types": "generated/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./generated/index.d.ts",
+      "default": "./generated/index.js"
+    }
+  },
+  "scripts": {
+    "prisma": "prisma",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev --name init",
+    "deploy": "prisma migrate deploy",
+    "seed": "ts-node prisma/seed.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "prisma": { "seed": "ts-node prisma/seed.ts" },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "prisma": "^5.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

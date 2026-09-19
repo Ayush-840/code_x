@@ -1,0 +1,26 @@
+{
+  "name": "@vibe-coder/websocket",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibe-coder/shared": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "dotenv": "^16.4.0",
+    "ioredis": "^5.4.0",
+    "jsonwebtoken": "^9.0.0",
+    "socket.io": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

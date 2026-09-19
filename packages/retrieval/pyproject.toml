@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "vibecoder-retrieval"
+version = "0.1.0"
+description = "Hybrid retrieval engine for Vibe Coder (dense + BM25 + RRF)"
+authors = ["Vibe Coder"]
+packages = [{ include = "retrieval", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = { extras = ["standard"], version = "^0.30.0" }
+pydantic = "^2.7.0"
+rank-bm25 = "^0.2.2"
+opensearch-py = "^2.4.0"
+openai = "^1.30.0"
+httpx = "^0.27.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+ruff = "^0.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
