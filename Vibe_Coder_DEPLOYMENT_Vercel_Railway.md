@@ -16,6 +16,8 @@ Single source of truth for deploying Vibe Coder to Vercel (frontend) and Railway
 | Dockerfile: `docker/Dockerfile.python` | **Local dev only** (docker-compose), selected via the `SERVICE` build arg. Never deployed. |
 | Migrations | Run via Railway `preDeployCommand` (`railway/api-worker.json`), so they run on deploys, not container restarts. |
 | Railway deploy source | Services build from this repo on Railway (auto-deploy on `git push`). GHCR images from `.github/workflows/docker.yml` remain the artifact record. |
+| `vercel.json` | **Removed.** With the Vercel Root Directory set, its `outputDirectory: apps/web/.next` resolved relative to `apps/web` and broke git deploys (`.../apps/web/apps/web/.next not found`). Vercel auto-detects Next.js — no config file needed. |
+| `@vibe-coder/shared` build | Emits to `dist/` (`main`/`types` point there). `apps/web/package.json` runs a `prebuild` hook that compiles it before `next build`; the api/worker/websocket Dockerfiles build it explicitly before consuming apps. |
 
 ## Topology
 
@@ -38,6 +40,23 @@ Set these **before** the first build (both are `NEXT_PUBLIC_*`, inlined at build
 |---|---|
 | `NEXT_PUBLIC_API_URL` | `https://<api-worker-service>.up.railway.app` |
 | `NEXT_PUBLIC_WS_URL` | `https://<websocket-service>.up.railway.app` |
+
+## Vercel project settings — required for git deploys
+
+The pnpm monorepo needs **Root Directory = `apps/web`** on the Vercel project
+(dashboard → Settings → Build & Deployment → Root Directory; there is no CLI
+flag). Without it, git-integration builds run at the repo root, `next` is not
+resolvable there, and the deploy fails with "No Next.js version detected".
+
+| Setting | Value |
+|---|---|
+| Root Directory | `apps/web` |
+| Framework Preset | Next.js (auto-detected) |
+| Build / Install / Output commands | leave empty |
+
+Do **not** add a root `vercel.json` (see decisions table). With the Root
+Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
+`apps/web/package.json` still compiles `@vibe-coder/shared` first.
 
 ## Environment variables — Railway `api-worker` service
 
@@ -104,16 +123,18 @@ Vercel:
 
 ```bash
 vercel login
-vercel link --project code-x --yes
+vercel link --project code_x --yes   # project name on Vercel is `code_x`
+# Dashboard → code_x → Settings → Build & Deployment → Root Directory = apps/web
+# (required; git deploys fail without it in this monorepo)
 echo "https://<api-worker>.up.railway.app" | vercel env add NEXT_PUBLIC_API_URL production
 echo "https://<websocket>.up.railway.app" | vercel env add NEXT_PUBLIC_WS_URL production
-vercel --prod
+vercel --prod                        # fallback; pushes to main auto-deploy
 ```
 
 ## Redeploying after a code change
 
 `git push` → Railway (repo-connected services) rebuilds changed services automatically.
-Vercel redeploys on push if the repo is connected in the dashboard, otherwise `vercel --prod`.
+Vercel (`code_x`) is repo-connected: pushes to `main` auto-deploy. Fallback: `vercel --prod`.
 
 ## One manual step outside this repo
 
@@ -124,6 +145,7 @@ The GitHub OAuth App callback URL must be set to
 ## Verification checklist (TRD §7 acceptance criteria)
 
 - [ ] `GET https://<api-worker>.up.railway.app/health` → 200; same for websocket `/health`
+- [ ] Vercel project Root Directory = `apps/web`; latest git deploy is ● Ready and `/` returns 200
 - [ ] GitHub login from the Vercel URL lands on the dashboard; `GET /v1/auth/me` returns 200 with cookies (browser network tab)
 - [ ] Fresh empty Postgres: full schema exists after first deploy (preDeployCommand ran) — no manual `psql`
 - [ ] Redeploy `python` → previously indexed repo search results still return hits (volume persisted)
