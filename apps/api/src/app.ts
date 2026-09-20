@@ -25,7 +25,10 @@ export function createApp() {
         if (!origin) return callback(null, true); // same-origin / server-to-server
         if (config.allowedOrigins.includes(origin)) return callback(null, true);
         if (config.previewPattern && config.previewPattern.test(origin)) return callback(null, true);
-        callback(new Error("Not allowed by CORS"));
+        // Disallowed origins: suppress CORS headers instead of throwing, so
+        // scanner/preview traffic gets a normal response without a 500 (and
+        // without the access-control headers, browsers block it client-side).
+        callback(null, false);
       },
       credentials: true,
     })
