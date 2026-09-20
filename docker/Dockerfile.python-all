@@ -1,3 +1,6 @@
+# Hosted deployment: builds all 4 Python services into ONE container.
+# CI (.github/workflows/docker.yml → build-python) pushes this as
+# ghcr.io/ayush-840/code_x-python — this is the image deployed on Railway.
 FROM python:3.13-slim AS base
 WORKDIR /app
 

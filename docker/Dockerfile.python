@@ -1,3 +1,6 @@
+# LOCAL DEV ONLY: per-service Python container selected via the SERVICE build
+# arg. Used by docker/docker-compose.yml. Hosted deployments use
+# docker/Dockerfile.python-all (single combined container) instead.
 FROM python:3.13-slim AS base
 WORKDIR /app
 

@@ -1,21 +1,11 @@
 #!/bin/sh
 set -e
 
-echo "[start] Waiting for database to be ready..."
-# Wait for database to be ready with retries
-MAX_RETRIES=30
-RETRY=0
-until ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma; do
-    RETRY=$((RETRY + 1))
-    if [ $RETRY -ge $MAX_RETRIES ]; then
-        echo "[start] Database migration failed after $MAX_RETRIES attempts"
-        exit 1
-    fi
-    echo "[start] Database not ready, waiting 2 seconds... (attempt $RETRY/$MAX_RETRIES)"
-    sleep 2
-done
-
-echo "[start] Database migrations completed successfully"
+# Migrations are NOT run here — on Railway they run via the service's
+# preDeployCommand (see railway/api-worker.json) so they only execute on
+# actual deploys, not on every container restart. If you run this image
+# outside Railway, run:
+#   ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 echo "[start] Starting API + Worker combined..."
 

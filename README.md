@@ -11,6 +11,7 @@ Source-of-truth documentation for the **Vibe Coder** platform — a GitHub-conne
 | `VIBE_CODER_TECHNICAL_SPEC.md` | Database schema, TypeScript interfaces, API design, retrieval engine internals |
 | `VIBE_CODER_API_SPEC.md` | Every REST + WebSocket contract, envelopes, error codes, rate limits |
 | `VIBE_CODER_DEPLOYMENT_GUIDE.md` | Dockerfiles, AWS ECS/Terraform infrastructure, CI/CD, production rollout |
+| `Vibe_Coder_DEPLOYMENT_Vercel_Railway.md` | Vercel + Railway deployment: topology, per-service env vars, deploy runbook |
 | `VIBE_CODER_QA_TEST_PLAN.md` | Manual test matrix across all feature suites |
 | `VIBE_CODER_EVALUATION_FRAMEWORK.md` | How generated answers are measured and graded |
 | `VIBE_CODER_ONCALL_RUNBOOK.md` | Incident response procedures |

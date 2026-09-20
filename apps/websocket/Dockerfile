@@ -20,6 +20,11 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 wsuser
 
 COPY --from=builder /app/packages/shared ./packages/shared
+# pnpm workspace layout: websocket's deps (socket.io, ioredis, ...) are
+# symlinked from apps/websocket/node_modules into the root .pnpm store, so both
+# directories are required at runtime.
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/websocket/node_modules ./apps/websocket/node_modules
 COPY --from=builder --chown=wsuser:nodejs /app/apps/websocket/dist ./apps/websocket/dist
 COPY --from=builder --chown=wsuser:nodejs /app/apps/websocket/package.json ./apps/websocket/
 

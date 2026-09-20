@@ -1,3 +1,7 @@
+# Hosted deployment: combined API + Worker image (chosen topology for Railway,
+# PRD-D06). CI (.github/workflows/docker.yml → build-api-worker) pushes this as
+# ghcr.io/ayush-840/code_x-api-worker. Migrations run via Railway's
+# preDeployCommand (railway/api-worker.json), not in this image's start script.
 FROM node:20-alpine AS base
 RUN apk add --no-cache git openssl
 WORKDIR /app
@@ -30,9 +34,15 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 apiuser
 
 COPY --from=builder /app/node_modules ./node_modules
+# pnpm workspace layout: each app's direct deps are symlinked from its own
+# node_modules into the root .pnpm store, so both levels are required at runtime.
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
 COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
+# Package manifest is required for require("@vibe-coder/database") to resolve.
+COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api/

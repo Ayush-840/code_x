@@ -26,6 +26,20 @@ const pubClient = new Redis(REDIS_URL);
 const subClient = pubClient.duplicate();
 
 const httpServer = createServer();
+
+// Plain HTTP health endpoint for platform health checks (e.g. Railway).
+// Must be registered before Socket.IO attaches: Socket.IO preserves existing
+// "request" listeners and forwards non-Socket.IO requests to them.
+httpServer.on("request", (req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, service: "websocket" }));
+    return;
+  }
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ ok: false, error: "Not found" }));
+});
+
 const io = new Server(httpServer, {
   cors: {
     origin(origin, callback) {
