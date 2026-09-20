@@ -16,6 +16,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY . .
 RUN corepack enable && pnpm --filter @vibe-coder/database exec prisma generate
+RUN pnpm --filter @vibe-coder/shared build
 RUN pnpm --filter @vibe-coder/api build
 
 FROM node:20-alpine AS runner
@@ -52,4 +53,4 @@ COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api
 USER apiuser
 EXPOSE 4000
 ENTRYPOINT []
-CMD ["sh", "-c", "for i in $(seq 1 30); do echo \"Attempt $i/30: waiting for database...\"; ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma && break || sleep 2; done; echo 'Migrations completed'; node apps/api/dist/apps/api/src/index.js"]
+CMD ["sh", "-c", "for i in $(seq 1 30); do echo \"Attempt $i/30: waiting for database...\"; ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma && break || sleep 2; done; echo 'Migrations completed'; node apps/api/dist/index.js"]

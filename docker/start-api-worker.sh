@@ -10,7 +10,7 @@ set -e
 echo "[start] Starting API + Worker combined..."
 
 # Start the API server in background
-node apps/api/dist/apps/api/src/index.js &
+node apps/api/dist/index.js &
 API_PID=$!
 echo "[start] API started (PID: $API_PID)"
 

@@ -22,6 +22,7 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY . .
 RUN corepack enable && pnpm --filter @vibe-coder/database exec prisma generate
+RUN pnpm --filter @vibe-coder/shared build
 RUN pnpm --filter @vibe-coder/api build
 RUN pnpm --filter @vibe-coder/worker build
 # Pre-download Prisma engines to avoid permission issues at runtime
