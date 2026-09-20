@@ -12,6 +12,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/websocket/node_modules ./apps/websocket/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
+RUN corepack enable && pnpm --filter @vibe-coder/shared build
 RUN corepack enable && pnpm --filter @vibe-coder/websocket build
 
 FROM node:20-alpine AS runner

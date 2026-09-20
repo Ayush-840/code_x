@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prebuild": "pnpm --filter @vibe-coder/shared build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
