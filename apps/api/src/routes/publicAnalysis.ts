@@ -54,11 +54,16 @@ router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) =>
       defaultBranch = gh.data.default_branch;
     } catch (ghErr: any) {
       const status = ghErr?.status ?? ghErr?.response?.status;
+      const msg = String(ghErr?.message ?? "");
       if (status === 404) {
         throw new HttpError(404, "REPO_NOT_FOUND", `Repository ${fullName} not found. Check the URL.`);
       }
+      if (status === 403 || /rate limit|quota/i.test(msg)) {
+        // GitHub allows only 60 unauthenticated requests/hour per IP.
+        throw new HttpError(429, "GITHUB_RATE_LIMITED", "GitHub's public API rate limit was hit — try again in a few minutes, or sign in.");
+      }
       if (ghErr instanceof HttpError) throw ghErr;
-      throw new HttpError(502, "GITHUB_API_ERROR", `GitHub API error: ${ghErr?.message ?? "unknown"}`);
+      throw new HttpError(502, "GITHUB_API_ERROR", `GitHub API error: ${msg || "unknown"}`);
     }
 
     const recent = await prisma.publicAnalysis.findFirst({
@@ -74,14 +79,24 @@ router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) =>
       return;
     }
 
-    const placeholderRepo = await prisma.repository.create({
-      data: {
-        userId: await ensureAnonUser(),
+    // Upsert (not create): a previous failed attempt may have left a placeholder
+    // repo for the same (anonymous, fullName) pair — reuse it instead of 500ing
+    // on the @@unique([userId, fullName]) constraint.
+    const placeholderRepo = await prisma.repository.upsert({
+      where: { userId_fullName: { userId: await ensureAnonUser(), fullName } },
+      update: { status: "PENDING", defaultBranch },
+      create: {
+        userId: ANON_USER_ID,
         fullName,
         defaultBranch,
         status: "PENDING",
       },
     });
+    // A reused placeholder may carry stale modules/artifacts from a previous
+    // failed run — clear them so the new job starts clean (artifact inserts
+    // would otherwise violate the (repoId, artifactType, version) unique).
+    await prisma.codeModule.deleteMany({ where: { repoId: placeholderRepo.id } });
+    await prisma.artifact.deleteMany({ where: { repoId: placeholderRepo.id } });
 
     const publicAnalysis = await prisma.publicAnalysis.create({
       data: {
