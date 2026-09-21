@@ -133,7 +133,21 @@ vercel --prod                        # fallback; pushes to main auto-deploy
 
 ## Redeploying after a code change
 
-`git push` → Railway (repo-connected services) rebuilds changed services automatically.
+All three app services (api-worker, websocket, python) are connected to
+`Ayush-840/code_x` @ `main` via the Railway GitHub App, so `git push` to `main`
+auto-deploys them (Railway builds with the per-service Dockerfile configured in
+each service's build settings).
+
+If a service ever shows `source: repo=None` (check with the GraphQL API),
+reconnect it with:
+
+```bash
+railway service source connect --repo Ayush-840/code_x --branch main --service <name>
+```
+
+Fallback if the GitHub integration is down: `railway up --service <name>`
+uploads the local tree instead.
+
 Vercel (`code_x`) is repo-connected: pushes to `main` auto-deploy. Fallback: `vercel --prod`.
 
 ## One manual step outside this repo
