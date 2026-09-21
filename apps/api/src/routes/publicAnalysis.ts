@@ -69,10 +69,16 @@ router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) =>
     const recent = await prisma.publicAnalysis.findFirst({
       where: { fullName, status: { in: ["PARSING", "INDEXING", "GENERATING", "READY"] } },
       orderBy: { createdAt: "desc" },
+      include: { repo: { include: { modules: true } } },
     });
-    if (recent && recent.status === "READY") {
+    if (recent && recent.status === "READY" && (recent.repo?.modules?.length ?? 0) > 0) {
       ok(res, { id: recent.id, status: "READY", cached: true }, 200);
       return;
+    }
+    if (recent && recent.status === "READY") {
+      // Ready but with no modules parsed — stale/empty result from an older
+      // pipeline bug; re-run rather than serve or silently reuse it.
+      recent.status = "FAILED";
     }
     if (recent && recent.status !== "FAILED") {
       ok(res, { id: recent.id, status: recent.status, cached: false }, 202);

@@ -73,7 +73,9 @@ async function detectDeployment(repoPath: string): Promise<Record<string, unknow
         if (DEPLOY_FILES.includes(entry.name)) {
           detected[rel] = { type: "directory" };
         }
-        if (!entry.name.startsWith(".") && entry.name !== "node_modules" && entry.name !== "__pycache__") {
+        // Recurse into dot-directories too: .github/workflows, .platform,
+        // .railway and friends are deployment config and belong in the scan.
+        if (entry.name !== "node_modules" && entry.name !== "__pycache__" && entry.name !== ".git") {
           await walk(join(dir, entry.name), rel);
         }
       } else {
@@ -91,6 +93,56 @@ async function detectDeployment(repoPath: string): Promise<Record<string, unknow
 
   await walk(repoPath, "");
   return Object.keys(detected).length > 0 ? detected : null;
+}
+
+const BINARY_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".svg", ".bmp", ".tiff",
+  ".pdf", ".zip", ".gz", ".tgz", ".tar", ".bz2", ".7z", ".rar",
+  ".mp3", ".mp4", ".mov", ".avi", ".webm", ".wav", ".ogg",
+  ".woff", ".woff2", ".ttf", ".otf", ".eot",
+  ".exe", ".dll", ".so", ".dylib", ".bin", ".wasm",
+  ".db", ".sqlite", ".sqlite3", ".pyc", ".class", ".jar",
+]);
+
+const MAX_FILE_BYTES = 512 * 1024; // 512 KB per file
+const MAX_TOTAL_FILES = 5000;
+
+async function collectSourceFiles(repoPath: string): Promise<{ path: string; content: string }[]> {
+  const out: { path: string; content: string }[] = [];
+
+  async function walk(dir: string, prefix: string) {
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (out.length >= MAX_TOTAL_FILES) return;
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === "__pycache__" || entry.name === ".git") continue;
+        await walk(join(dir, entry.name), rel);
+      } else if (entry.isFile()) {
+        if (entry.name.startsWith(".")) {
+          // Keep dotfiles that are meaningful config; skip others (e.g. .DS_Store).
+          const kept = [".env.example", ".dockerignore", ".editorconfig", ".gitlab-ci.yml"];
+          if (!kept.includes(entry.name) && !DEPLOY_FILES.includes(entry.name)) continue;
+        }
+        const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+        if (BINARY_EXTENSIONS.has(ext)) continue;
+        try {
+          const stat = await import("node:fs/promises").then((m) => m.stat(join(dir, entry.name)));
+          if (stat.size > MAX_FILE_BYTES) continue;
+          const content = await readFile(join(dir, entry.name), "utf-8");
+          // Heuristic binary sniff: NUL byte in the first 1 KB → not source.
+          if (content.slice(0, 1024).includes("\u0000")) continue;
+          out.push({ path: rel, content });
+        } catch {
+          // unreadable file — skip
+        }
+      }
+    }
+  }
+
+  await walk(repoPath, "");
+  return out;
 }
 
 export async function analyzeRepo(data: AnalyzeRepoData) {
@@ -136,12 +188,17 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
     // 1b. DEPLOYMENT DETECTION (PRD-A05)
     const deploymentInfo = await detectDeployment(dir);
 
+    // Collect file contents for the analysis service: it runs in a different
+    // container on Railway, so a local path is invisible to it. Only ship
+    // text-ish source files, skipping binaries and oversized files.
+    const files = await collectSourceFiles(dir);
+
     // 2. PARSE + CHUNK
     await progress(jobId, "PARSING", 20, "Parsing AST");
     const parseRes = await fetch(`${ANALYSIS_URL}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, repoId, repoPath: dir, language: "auto" }),
+      body: JSON.stringify({ jobId, repoId, files, language: "auto" }),
     });
     const parsed = (await parseRes.json()) as {
       modules: { name: string; path: string; fileCount: number; lineCount: number }[];
