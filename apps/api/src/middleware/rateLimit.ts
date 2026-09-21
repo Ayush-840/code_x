@@ -18,3 +18,18 @@ export function planRateLimit(planKey: string) {
     keyGenerator: (req) => req.ip ?? "unknown",
   });
 }
+
+const ANON_LIMITS: Record<string, number> = {
+  analyze: 5,
+  status: 30,
+};
+
+export function anonymousRateLimit(action: "analyze" | "status") {
+  return rateLimit({
+    windowMs: 60_000,
+    max: ANON_LIMITS[action],
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip ?? "unknown",
+  });
+}

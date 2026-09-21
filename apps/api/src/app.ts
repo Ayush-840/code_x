@@ -15,6 +15,7 @@ import chatRoutes from "./routes/chat";
 import mockInterviewRoutes from "./routes/mockInterviews";
 import usageRoutes from "./routes/usage";
 import billingRoutes from "./routes/billing";
+import publicAnalysisRoutes from "./routes/publicAnalysis";
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,7 @@ export function createApp() {
   app.use("/v1", requireAuth, mockInterviewRoutes);
   app.use("/v1/usage", requireAuth, usageRoutes);
   app.use("/v1/billing", billingRoutes);
+  app.use("/v1/public", publicAnalysisRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

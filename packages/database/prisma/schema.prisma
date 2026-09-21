@@ -73,6 +73,7 @@ model Repository {
   artifacts             Artifact[]
   chatSessions          ChatSession[]
   mockInterviewSessions MockInterviewSession[]
+  publicAnalyses        PublicAnalysis[]
   createdAt             DateTime               @default(now())
 
   @@unique([userId, fullName])
@@ -80,18 +81,19 @@ model Repository {
 }
 
 model AnalysisJob {
-  id            String      @id @default(uuid()) @db.Uuid
-  repoId        String      @db.Uuid
-  repo          Repository  @relation(fields: [repoId], references: [id])
-  status        JobStatus   @default(QUEUED)
+  id            String         @id @default(uuid()) @db.Uuid
+  repoId        String         @db.Uuid
+  repo          Repository     @relation(fields: [repoId], references: [id])
+  status        JobStatus      @default(QUEUED)
   stage         String?
-  progress      Int         @default(0)
+  progress      Int            @default(0)
   errorMessage  String?
   startedAt     DateTime?
   completedAt   DateTime?
   modules       CodeModule[]
   artifacts     Artifact[]
-  createdAt     DateTime    @default(now())
+  publicAnalyses PublicAnalysis[]
+  createdAt     DateTime       @default(now())
 
   @@index([repoId])
 }
@@ -108,6 +110,7 @@ model CodeModule {
   complexityScore  Float?
   fileCount        Int            @default(0)
   lineCount        Int            @default(0)
+  readingOrderIndex Int?
   symbols          CodeSymbol[]
   createdAt        DateTime       @default(now())
 
@@ -227,4 +230,24 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+model PublicAnalysis {
+  id               String        @id @default(uuid()) @db.Uuid
+  fullName         String
+  defaultBranch    String        @default("main")
+  status           RepoStatus    @default(PENDING)
+  requestIp        String?
+  expiresAt        DateTime?
+  claimedByUserId  String?       @db.Uuid
+  repo             Repository?   @relation(fields: [repoId], references: [id])
+  repoId           String?       @db.Uuid
+  job              AnalysisJob?  @relation(fields: [jobId], references: [id])
+  jobId            String?       @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([fullName])
+  @@index([claimedByUserId])
+  @@index([expiresAt])
 }

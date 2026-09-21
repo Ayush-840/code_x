@@ -93,6 +93,7 @@ export default function LandingPage() {
           <span style={{ fontWeight: 700, fontSize: 18 }}>Vibe Coder</span>
         </div>
         <div style={S.navRight}>
+          <a href="/analyze" style={S.navLink}>Public analysis</a>
           <a href="/login" style={S.navLink}>Sign in</a>
           <a href="/login" className="btn btn-primary btn-sm">Get started</a>
         </div>

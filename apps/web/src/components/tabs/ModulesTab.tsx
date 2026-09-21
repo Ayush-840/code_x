@@ -15,6 +15,7 @@ interface Module {
   complexityScore?: number | null;
   fileCount?: number;
   lineCount?: number;
+  readingOrderIndex?: number | null;
 }
 
 export function ModulesTab({ repoId }: { repoId: string }) {
@@ -41,12 +42,14 @@ export function ModulesTab({ repoId }: { repoId: string }) {
   if (error) return <EmptyState error={error} />;
   if (modules.length === 0) return <EmptyState />;
 
+  const sorted = [...modules].sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999));
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ marginBottom: 8, fontSize: 14, color: "var(--text-muted)" }}>
-        {modules.length} module{modules.length !== 1 ? "s" : ""} detected
+        {modules.length} module{modules.length !== 1 ? "s" : ""} detected · reading order
       </div>
-      {modules.map((mod) => {
+      {sorted.map((mod, i) => {
         const key = mod.id ?? mod.name;
         const isOpen = expanded === key;
         const desc = mod.purpose ?? mod.purposeSummary;
@@ -59,6 +62,9 @@ export function ModulesTab({ repoId }: { repoId: string }) {
             >
               <div style={{ flex: 1, textAlign: "left" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, minWidth: 20 }}>
+                    #{i + 1}
+                  </span>
                   <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
                     {mod.name}
                   </span>

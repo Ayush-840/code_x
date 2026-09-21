@@ -17,3 +17,4 @@ packages/database/generated/
 *.tsbuildinfo
 .venv/
 .vercel
+.aider*

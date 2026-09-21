@@ -9,9 +9,10 @@ import { ModulesTab } from "@/components/tabs/ModulesTab";
 import { QuestionsTab } from "@/components/tabs/QuestionsTab";
 import { ChatTab } from "@/components/tabs/ChatTab";
 import { MockInterviewTab } from "@/components/tabs/MockInterviewTab";
+import { DeploymentTab } from "@/components/tabs/DeploymentTab";
 import { useRouter } from "next/navigation";
 
-type Tab = "architecture" | "modules" | "questions" | "chat" | "interview";
+type Tab = "architecture" | "modules" | "questions" | "chat" | "interview" | "deployment";
 
 interface Repo {
   id: string;
@@ -28,6 +29,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "questions",    label: "Question Bank",   icon: "❓" },
   { key: "chat",         label: "Ask",             icon: "💬" },
   { key: "interview",    label: "Mock Interview",  icon: "🎤" },
+  { key: "deployment",   label: "Deployment",      icon: "🚀" },
 ];
 
 const STATUS_BADGE: Record<string, string> = {
@@ -142,6 +144,7 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
         {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}
         {activeTab === "chat"         && <ChatTab repoId={repoId} socket={socket} />}
         {activeTab === "interview"    && <MockInterviewTab repoId={repoId} socket={socket} />}
+        {activeTab === "deployment"   && <DeploymentTab repoId={repoId} />}
       </div>
     </div>
   );

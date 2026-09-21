@@ -49,6 +49,7 @@ export const config = {
   isProd,
   cookieCrossSite,
   cookieSameSite: cookieCrossSite ? ("none" as const) : ("lax" as const),
+  cookieSecure: cookieCrossSite || isProd,
   allowedOrigins: optionalEnv("FRONTEND_URL", "http://localhost:3000").split(","),
   previewPattern: process.env.FRONTEND_PREVIEW_PATTERN
     ? new RegExp(process.env.FRONTEND_PREVIEW_PATTERN)

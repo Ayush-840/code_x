@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { simpleGit } from "simple-git";
@@ -14,9 +14,10 @@ const GENERATION_URL = process.env.GENERATION_SERVICE_URL ?? "http://localhost:8
 interface AnalyzeRepoData {
   repoId: string;
   jobId: string;
-  accessToken: string;
+  accessToken?: string;
   fullName: string;
   defaultBranch: string;
+  publicAnalysisId?: string;
 }
 
 const progressPublisher = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
@@ -37,8 +38,63 @@ function maskToken(token: string): string {
   return token.slice(0, 4) + "****" + token.slice(-4);
 }
 
+function computeReadingOrder(
+  modules: { name: string; path: string; fileCount: number; lineCount: number }[]
+): Map<string, number> {
+  const sorted = [...modules].sort((a, b) => {
+    const depthA = a.path.split("/").length;
+    const depthB = b.path.split("/").length;
+    if (depthA !== depthB) return depthA - depthB;
+    return a.name.localeCompare(b.name);
+  });
+  const order = new Map<string, number>();
+  sorted.forEach((mod, i) => order.set(mod.name, i));
+  return order;
+}
+
+const DEPLOY_FILES = [
+  "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+  "vercel.json", "netlify.toml", "railway.toml", "render.yaml",
+  "fly.toml", "app.json", "Procfile", "Makefile",
+  ".github/workflows", "k8s", "kubernetes",
+  "terraform", "main.tf", "variables.tf",
+  "serverless.yml", "serverless.yaml",
+];
+
+async function detectDeployment(repoPath: string): Promise<Record<string, unknown> | null> {
+  const detected: Record<string, unknown> = {};
+
+  async function walk(dir: string, prefix: string) {
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (DEPLOY_FILES.includes(entry.name)) {
+          detected[rel] = { type: "directory" };
+        }
+        if (!entry.name.startsWith(".") && entry.name !== "node_modules" && entry.name !== "__pycache__") {
+          await walk(join(dir, entry.name), rel);
+        }
+      } else {
+        if (DEPLOY_FILES.includes(entry.name)) {
+          try {
+            const content = await readFile(join(dir, entry.name), "utf-8");
+            detected[rel] = { type: "file", preview: content.slice(0, 500) };
+          } catch {
+            detected[rel] = { type: "file" };
+          }
+        }
+      }
+    }
+  }
+
+  await walk(repoPath, "");
+  return Object.keys(detected).length > 0 ? detected : null;
+}
+
 export async function analyzeRepo(data: AnalyzeRepoData) {
-  const { repoId, jobId, accessToken, fullName, defaultBranch } = data;
+  const { repoId, jobId, accessToken, fullName, defaultBranch, publicAnalysisId } = data;
   let dir: string | null = null;
 
   try {
@@ -46,20 +102,39 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       where: { id: jobId },
       data: { status: "RUNNING", startedAt: new Date() },
     });
-    await prisma.repository.update({
-      where: { id: repoId },
-      data: { status: "PARSING" },
-    });
+
+    // For public analyses, the API creates a placeholder Repository;
+    // we just update its status here. For authed analyses, update the
+    // existing repo.
+    if (publicAnalysisId) {
+      await prisma.repository.update({
+        where: { id: repoId },
+        data: { status: "PARSING" },
+      });
+      await prisma.publicAnalysis.update({
+        where: { id: publicAnalysisId },
+        data: { status: "PARSING" },
+      });
+    } else {
+      await prisma.repository.update({
+        where: { id: repoId },
+        data: { status: "PARSING" },
+      });
+    }
 
     // 1. CLONE
     await progress(jobId, "CLONING", 5, "Cloning repository");
     dir = await mkdtemp(join(tmpdir(), "vibecoder-"));
-    console.log(`[worker] Cloning ${fullName} to ${dir} (token: ${maskToken(accessToken)})`);
-    await simpleGit().clone(
-      `https://x-access-token:${accessToken}@github.com/${fullName}.git`,
-      dir,
-      ["--depth", "1"]
-    );
+
+    const cloneUrl = accessToken
+      ? `https://x-access-token:${accessToken}@github.com/${fullName}.git`
+      : `https://github.com/${fullName}.git`;
+
+    console.log(`[worker] Cloning ${fullName} to ${dir} (token: ${accessToken ? maskToken(accessToken) : "none"})`);
+    await simpleGit().clone(cloneUrl, dir, ["--depth", "1"]);
+
+    // 1b. DEPLOYMENT DETECTION (PRD-A05)
+    const deploymentInfo = await detectDeployment(dir);
 
     // 2. PARSE + CHUNK
     await progress(jobId, "PARSING", 20, "Parsing AST");
@@ -83,6 +158,15 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       });
     }
 
+    // 2b. READING ORDER (PRD-A04)
+    const readingOrder = computeReadingOrder(parsed.modules);
+    for (const [name, idx] of readingOrder) {
+      await prisma.codeModule.updateMany({
+        where: { repoId, name },
+        data: { readingOrderIndex: idx },
+      });
+    }
+
     // 3. INDEX
     await progress(jobId, "CHUNKING", 45, "Indexing code");
     await fetch(`${RETRIEVAL_URL}/index`, {
@@ -97,7 +181,7 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
     const artRes = await fetch(`${GENERATION_URL}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, repoId, modules: parsed.modules }),
+      body: JSON.stringify({ jobId, repoId: repoId, modules: parsed.modules }),
     });
     const artifacts = (await artRes.json()) as {
       type: string;
@@ -116,6 +200,18 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       });
     }
 
+    // 4b. SAVE DEPLOYMENT ARTIFACT (PRD-A05)
+    if (deploymentInfo) {
+      await prisma.artifact.create({
+        data: {
+          repoId,
+          jobId,
+          artifactType: "deployment",
+          content: deploymentInfo as import("@vibe-coder/database").Prisma.InputJsonValue,
+        },
+      });
+    }
+
     // 5. DONE
     await progress(jobId, "DONE", 100, "Analysis complete");
     await prisma.analysisJob.update({
@@ -126,6 +222,12 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       where: { id: repoId },
       data: { status: "READY", lastAnalyzedAt: new Date() },
     });
+    if (publicAnalysisId) {
+      await prisma.publicAnalysis.update({
+        where: { id: publicAnalysisId },
+        data: { status: "READY" },
+      });
+    }
   } catch (error) {
     console.error(`[worker] Analysis failed for job ${jobId}:`, error);
     await prisma.analysisJob.update({
@@ -136,13 +238,19 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
         completedAt: new Date(),
       },
     });
-    await prisma.repository.update({
-      where: { id: repoId },
-      data: { status: "FAILED" },
-    });
+    if (publicAnalysisId) {
+      await prisma.publicAnalysis.update({
+        where: { id: publicAnalysisId },
+        data: { status: "FAILED" },
+      });
+    } else {
+      await prisma.repository.update({
+        where: { id: repoId },
+        data: { status: "FAILED" },
+      });
+    }
     throw error;
   } finally {
-    // Always clean up cloned repo directory
     if (dir) {
       try {
         await rm(dir, { recursive: true, force: true });

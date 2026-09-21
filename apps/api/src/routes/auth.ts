@@ -21,8 +21,8 @@ function setAuthCookies(
   accessToken: string,
   refreshToken: string
 ): void {
-  const { isProd, cookieSameSite } = config;
-  const baseOpts = { httpOnly: true, secure: isProd, sameSite: cookieSameSite, path: "/" };
+  const { cookieSecure, cookieSameSite } = config;
+  const baseOpts = { httpOnly: true, secure: cookieSecure, sameSite: cookieSameSite, path: "/" };
 
   res.cookie("access_token", accessToken, {
     ...baseOpts,
@@ -43,11 +43,10 @@ function clearAuthCookies(res: Response): void {
 // GET /v1/auth/github — initiate OAuth flow
 router.get("/github", (_req, res) => {
   const state = randomBytes(16).toString("hex");
-  const { isProd, cookieSameSite } = config;
-  res.cookie("oauth_state", state, { httpOnly: true, secure: isProd, sameSite: cookieSameSite });
+  const { cookieSecure, cookieSameSite } = config;
+  res.cookie("oauth_state", state, { httpOnly: true, secure: cookieSecure, sameSite: cookieSameSite });
   const params = new URLSearchParams({
     client_id: config.githubClientId,
-    redirect_uri: `${config.apiUrl}/v1/auth/github/callback`,
     scope: "repo,user:email",
     state,
   });
@@ -70,7 +69,6 @@ router.get("/github/callback", async (req, res, next) => {
         client_id: config.githubClientId,
         client_secret: config.githubClientSecret,
         code,
-        redirect_uri: `${config.apiUrl}/v1/auth/github/callback`,
       }),
     });
     const { access_token } = (await tokenResp.json()) as { access_token?: string };
