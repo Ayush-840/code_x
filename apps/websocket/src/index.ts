@@ -25,6 +25,12 @@ const allowedOrigins = FRONTEND_URL.split(",");
 const pubClient = new Redis(REDIS_URL);
 const subClient = pubClient.duplicate();
 
+// Dedicated connection for the app-level "analysis-progress" subscription.
+// pubClient is used by the Socket.IO adapter to publish; once a Redis
+// connection subscribes it can only run subscriber commands, so reusing it
+// here would crash on the first publish ("Connection in subscriber mode").
+const appSubClient = pubClient.duplicate();
+
 const httpServer = createServer();
 
 // Plain HTTP health endpoint for platform health checks (e.g. Railway).
@@ -54,8 +60,8 @@ const io = new Server(httpServer, {
 });
 
 // Subscribe to analysis pipeline progress published by api/worker.
-pubClient.subscribe("analysis-progress");
-pubClient.on("message", (_channel, message) => {
+appSubClient.subscribe("analysis-progress");
+appSubClient.on("message", (_channel, message) => {
   try {
     const { jobId, repoId, stage, progress, message: text } = JSON.parse(message) as {
       jobId: string;
