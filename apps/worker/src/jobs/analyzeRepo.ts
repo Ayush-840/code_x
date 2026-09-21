@@ -70,7 +70,8 @@ async function detectDeployment(repoPath: string): Promise<Record<string, unknow
     for (const entry of entries) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        if (DEPLOY_FILES.includes(entry.name)) {
+        // Match either a bare name ("k8s") or a repo-relative path (".github/workflows").
+        if (DEPLOY_FILES.includes(entry.name) || DEPLOY_FILES.includes(rel)) {
           detected[rel] = { type: "directory" };
         }
         // Recurse into dot-directories too: .github/workflows, .platform,
@@ -257,17 +258,17 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       });
     }
 
-    // 4b. SAVE DEPLOYMENT ARTIFACT (PRD-A05)
-    if (deploymentInfo) {
-      await prisma.artifact.create({
-        data: {
-          repoId,
-          jobId,
-          artifactType: "deployment",
-          content: deploymentInfo as import("@vibe-coder/database").Prisma.InputJsonValue,
-        },
-      });
-    }
+    // 4b. SAVE DEPLOYMENT ARTIFACT (PRD-A05) — always written: an empty map
+    // is the explicit "no deployment config found" state (rendered as an
+    // honest empty state in the tab), never a hallucinated guess.
+    await prisma.artifact.create({
+      data: {
+        repoId,
+        jobId,
+        artifactType: "deployment",
+        content: (deploymentInfo ?? {}) as import("@vibe-coder/database").Prisma.InputJsonValue,
+      },
+    });
 
     // 5. DONE
     await progress(jobId, "DONE", 100, "Analysis complete");
