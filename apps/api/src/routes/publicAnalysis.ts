@@ -19,6 +19,22 @@ function parseRepoUrl(url: string): { owner: string; repo: string } {
 
 const ANON_USER_ID = "00000000-0000-0000-0000-000000000000";
 
+// Anonymous analyses attach to a sentinel "anonymous" user so the placeholder
+// Repository satisfies its non-null userId FK. Created lazily so fresh
+// environments (new DBs, preview envs) work without a manual seed step.
+async function ensureAnonUser(): Promise<string> {
+  try {
+    await prisma.user.upsert({
+      where: { id: ANON_USER_ID },
+      update: {},
+      create: { id: ANON_USER_ID, githubId: 0, username: "anonymous" },
+    });
+  } catch {
+    // Unique-violation race with a concurrent request — the row exists either way.
+  }
+  return ANON_USER_ID;
+}
+
 router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) => {
   try {
     const { repoUrl } = req.body as { repoUrl?: string };
@@ -60,7 +76,7 @@ router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) =>
 
     const placeholderRepo = await prisma.repository.create({
       data: {
-        userId: ANON_USER_ID,
+        userId: await ensureAnonUser(),
         fullName,
         defaultBranch,
         status: "PENDING",
