@@ -29,7 +29,8 @@ RUN pnpm --filter @vibe-coder/worker build
 RUN ./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma 2>/dev/null || true
 
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
+# git is required at runtime: the worker clones repos via simple-git.
+RUN apk add --no-cache git openssl
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 apiuser
