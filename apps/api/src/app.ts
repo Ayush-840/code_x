@@ -40,6 +40,10 @@ export function createApp() {
   app.get("/health", (_req, res) => res.json({ ok: true, service: "api" }));
 
   app.use("/v1/auth", authRoutes);
+  // Must be mounted before any broad `app.use("/v1", requireAuth, ...)` layer:
+  // that layer runs requireAuth for every /v1/* request and would 401 these
+  // public, no-auth routes before they ever match.
+  app.use("/v1/public", publicAnalysisRoutes);
   app.use("/v1/users", requireAuth, userRoutes);
   app.use("/v1/repos", requireAuth, repoRoutes);
   app.use("/v1/repos", requireAuth, artifactRoutes);
@@ -47,7 +51,6 @@ export function createApp() {
   app.use("/v1", requireAuth, mockInterviewRoutes);
   app.use("/v1/usage", requireAuth, usageRoutes);
   app.use("/v1/billing", billingRoutes);
-  app.use("/v1/public", publicAnalysisRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
