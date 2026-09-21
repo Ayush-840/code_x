@@ -58,7 +58,7 @@ router.get("/github/callback", async (req, res, next) => {
   try {
     const { code, state } = req.query as { code?: string; state?: string };
     if (!code || !state || state !== req.cookies.oauth_state) {
-      throw new HttpError(400, "VALIDATION_ERROR", "OAuth state mismatch");
+      throw new HttpError(400, "VALIDATION_ERROR", "OAuth state mismatch — please try signing in again");
     }
 
     // Exchange code for GitHub access token
@@ -121,7 +121,13 @@ router.get("/github/callback", async (req, res, next) => {
     setAuthCookies(res, accessToken, rawRefresh);
     res.redirect(`${config.frontendUrl}/login?authenticated=1`);
   } catch (err) {
-    next(err);
+    // The user arrived here via a top-level browser navigation from GitHub, so
+    // send them back to a recoverable UI state instead of dumping raw JSON.
+    // The login page already renders ?error= messages.
+    res.clearCookie("oauth_state", { path: "/" });
+    const message =
+      err instanceof HttpError ? err.message : "Sign-in failed. Please try again.";
+    res.redirect(`${config.frontendUrl}/login?error=${encodeURIComponent(message)}`);
   }
 });
 
