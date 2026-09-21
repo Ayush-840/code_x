@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { Octokit } from "octokit";
 import { prisma } from "../db";
@@ -14,6 +14,44 @@ const ACCESS_TOKEN_EXPIRY = "15m";
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Stateless CSRF protection for the OAuth flow.
+ *
+ * The `oauth_state` httpOnly cookie alone is not reliable here: the callback is
+ * a top-level cross-site navigation (GitHub → Railway), and browsers with
+ * third-party cookies blocked silently drop the `SameSite=None` cookie, causing
+ * "OAuth state mismatch" errors for users with strict tracking protection.
+ *
+ * Instead, the state value itself carries a timestamp and an HMAC over both,
+ * signed with the JWT secret. The callback verifies the signature and expiry
+ * without needing any cookie. The cookie is still set (and checked when
+ * present) so the flow also fails closed against replay across browsers.
+ */
+function signOAuthState(nonce: string): string {
+  const issuedAt = Date.now().toString(36);
+  const payload = `${nonce}.${issuedAt}`;
+  const sig = createHmac("sha256", config.jwtSecret).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function verifyOAuthState(state: string): boolean {
+  const parts = state.split(".");
+  if (parts.length !== 3) return false;
+  const [nonce, issuedAt, sig] = parts;
+  const expected = createHmac("sha256", config.jwtSecret)
+    .update(`${nonce}.${issuedAt}`)
+    .digest("base64url");
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
+    return false;
+  }
+  const age = Date.now() - parseInt(issuedAt, 36);
+  return Number.isFinite(age) && age >= 0 && age <= OAUTH_STATE_MAX_AGE_MS;
 }
 
 function setAuthCookies(
@@ -42,7 +80,8 @@ function clearAuthCookies(res: Response): void {
 
 // GET /v1/auth/github — initiate OAuth flow
 router.get("/github", (_req, res) => {
-  const state = randomBytes(16).toString("hex");
+  const nonce = randomBytes(16).toString("hex");
+  const state = signOAuthState(nonce);
   const { cookieSecure, cookieSameSite } = config;
   res.cookie("oauth_state", state, { httpOnly: true, secure: cookieSecure, sameSite: cookieSameSite });
   const params = new URLSearchParams({
@@ -57,7 +96,14 @@ router.get("/github", (_req, res) => {
 router.get("/github/callback", async (req, res, next) => {
   try {
     const { code, state } = req.query as { code?: string; state?: string };
-    if (!code || !state || state !== req.cookies.oauth_state) {
+    const cookieState = req.cookies?.oauth_state;
+    // The signed state must always be valid. When the browser kept the
+    // oauth_state cookie, it must also match — a mismatch means someone
+    // replayed a state from a different session.
+    if (!code || !state || !verifyOAuthState(state)) {
+      throw new HttpError(400, "VALIDATION_ERROR", "OAuth state mismatch — please try signing in again");
+    }
+    if (cookieState && cookieState !== state) {
       throw new HttpError(400, "VALIDATION_ERROR", "OAuth state mismatch — please try signing in again");
     }
 
