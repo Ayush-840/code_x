@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: codegraph-parser
+Version: 0.1.0
+Summary: CodeGraph parser using tree-sitter
+Requires-Python: >=3.11
+Requires-Dist: tree-sitter>=0.21.0
+Requires-Dist: tree-sitter-python>=0.23.0
+Requires-Dist: networkx==3.3
+Requires-Dist: pydantic==2.8.2
+Requires-Dist: pathspec>=0.12.0

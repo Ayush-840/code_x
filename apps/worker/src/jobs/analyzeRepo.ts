@@ -38,6 +38,19 @@ function maskToken(token: string): string {
   return token.slice(0, 4) + "****" + token.slice(-4);
 }
 
+/**
+ * Machine-readable failure category (TRD §5 — resolves PRD-I04): lets the
+ * frontend show a distinct message per failure mode instead of one generic
+ * "Analysis failed" string. Pattern-matched on the error message because the
+ * failure sources (Octokit, git, Postgres, fetch) share no error taxonomy.
+ */
+function classifyError(error: unknown): "NOT_FOUND" | "RATE_LIMITED" | "SYSTEM_ERROR" {
+  const msg = String((error as Error)?.message ?? "");
+  if (/not found|404/i.test(msg)) return "NOT_FOUND";
+  if (/rate limit/i.test(msg)) return "RATE_LIMITED";
+  return "SYSTEM_ERROR";
+}
+
 function computeReadingOrder(
   modules: { name: string; path: string; fileCount: number; lineCount: number }[]
 ): Map<string, number> {
@@ -319,12 +332,16 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       });
     }
   } catch (error) {
-    console.error(`[worker] Analysis failed for job ${jobId}:`, error);
+    const category = classifyError(error);
+    // Job ID in the log stays (PRD-I05): correlates worker logs with the ID
+    // shown in the UI; category makes the failure greppable by kind.
+    console.error(`[worker] Analysis failed for job ${jobId} (${category}):`, error);
     await prisma.analysisJob.update({
       where: { id: jobId },
       data: {
         status: "FAILED",
         errorMessage: (error as Error).message,
+        errorCategory: category,
         completedAt: new Date(),
       },
     });

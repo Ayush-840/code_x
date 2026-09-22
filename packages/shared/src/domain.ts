@@ -40,6 +40,8 @@ export interface AnalysisJob {
   stage: AnalysisStage | null;
   progress: number;
   errorMessage: string | null;
+  /** Machine-readable failure class (PRD-I04): NOT_FOUND | RATE_LIMITED | SYSTEM_ERROR. */
+  errorCategory: string | null;
   startedAt: string | null;
   completedAt: string | null;
 }

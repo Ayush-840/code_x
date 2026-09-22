@@ -21,7 +21,14 @@ export default function AnalyzePage() {
       );
       router.push(`/analyze/${res.id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Analysis failed. Check the URL and try again.");
+      // Submit-time errors are network/validation problems (job failures
+      // surface on the detail page, PRD-I04) — so this fallback must not
+      // blame the URL.
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Couldn't reach the analysis service. Check your connection and try again."
+      );
       setBusy(false);
     }
   };

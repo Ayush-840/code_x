@@ -39,7 +39,7 @@ interface AnalysisResult {
   defaultBranch: string;
   createdAt: string;
   expiresAt: string;
-  job: { stage?: string | null; progress: number; status: string } | null;
+  job: { stage?: string | null; progress: number; status: string; errorMessage?: string | null; errorCategory?: string | null } | null;
   modules: Module[];
   artifacts: Artifact[];
 }
@@ -77,6 +77,39 @@ export default function PublicAnalysisPage() {
           <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Analysis not found</h2>
           <p style={{ color: "var(--text-muted)", fontSize: 14 }}>{error}</p>
           <a href="/analyze" className="btn btn-primary" style={{ marginTop: 24 }}>Analyze another repo</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (result?.status === "FAILED") {
+    // Distinct message per failure category (PRD-I04) — the URL is almost
+    // never the problem, so the old catch-all "check the URL" copy sent
+    // users down the wrong path.
+    const category = result.job?.errorCategory ?? "SYSTEM_ERROR";
+    const messages: Record<string, string> = {
+      NOT_FOUND: "This repository couldn't be found. Double-check the URL — it must point to a public GitHub repo.",
+      RATE_LIMITED: "GitHub's rate limit was hit. Wait a few minutes and try again — or sign in for a higher limit.",
+      SYSTEM_ERROR: "Something went wrong on our end. Your repo URL was fine — please try again in a bit.",
+    };
+    return (
+      <div style={S.page}>
+        <div className="gradient-bg" />
+        <div style={S.center}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠</div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Analysis failed</h2>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14, maxWidth: 460, margin: "0 auto 16px" }}>
+            {messages[category] ?? messages.SYSTEM_ERROR}
+          </p>
+          {result.job?.errorMessage && (
+            <details style={{ marginBottom: 24, color: "var(--text-muted)", fontSize: 12 }}>
+              <summary style={{ cursor: "pointer" }}>Technical details</summary>
+              <code style={{ display: "block", marginTop: 8, wordBreak: "break-word" }}>
+                {result.job.errorMessage}
+              </code>
+            </details>
+          )}
+          <a href="/analyze" className="btn btn-primary">Try another repo</a>
         </div>
       </div>
     );

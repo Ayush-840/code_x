@@ -1,0 +1,10 @@
+pyproject.toml
+src/codegraph_parser/__init__.py
+src/codegraph_parser/cli.py
+src/codegraph_parser/graph_store.py
+src/codegraph_parser/parser.py
+src/codegraph_parser.egg-info/PKG-INFO
+src/codegraph_parser.egg-info/SOURCES.txt
+src/codegraph_parser.egg-info/dependency_links.txt
+src/codegraph_parser.egg-info/requires.txt
+src/codegraph_parser.egg-info/top_level.txt

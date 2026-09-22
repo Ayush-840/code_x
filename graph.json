@@ -1,0 +1,591 @@
+{
+  "nodes": [
+    {
+      "id": "src/codegraph_parser/__init__.py::module",
+      "type": "module",
+      "file": "src/codegraph_parser/__init__.py",
+      "name": "src/codegraph_parser/__init__.py",
+      "line_start": 1,
+      "line_end": 4,
+      "docstring": null,
+      "signature": null
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::module",
+      "type": "module",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "src/codegraph_parser/parser.py",
+      "line_start": 1,
+      "line_end": 367,
+      "docstring": null,
+      "signature": null
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::parse_repo",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "parse_repo",
+      "line_start": 50,
+      "line_end": 77,
+      "docstring": null,
+      "signature": "def parse_repo(repo_path: str) -> GraphData:\n    parser = Parser()\n    parser.language = PY_LANGUAGE\n\n    root = Path(repo_path).resolve()\n    spec = _load_gitignore(root)\n\n    nodes: list[Node] = []\n    edges: list[Edge] = []\n    file_imports: dict[str, list[str]] = {}\n\n    for py_file in _walk_python_files(root, spec):\n        rel_path = py_file.relative_to(root).as_posix()\n        try:\n            raw = py_file.read_bytes()\n        except Exception:\n            continue\n\n        tree = parser.parse(raw)\n        file_nodes, file_edges, imports = _extract_from_file(tree, raw, rel_path)\n        nodes.extend(file_nodes)\n        edges.extend(file_edges)\n        if imports"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_load_gitignore",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_load_gitignore",
+      "line_start": 80,
+      "line_end": 86,
+      "docstring": null,
+      "signature": "def _load_gitignore(root: Path) -> pathspec.PathSpec:\n    gitignore_path = root / \".gitignore\"\n    patterns = []\n    if gitignore_path.exists()"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_walk_python_files",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_walk_python_files",
+      "line_start": 89,
+      "line_end": 98,
+      "docstring": null,
+      "signature": "def _walk_python_files(root: Path, spec: pathspec.PathSpec) -> list[Path]:\n    files = []\n    for path in root.rglob(\"*.py\"):\n        try:\n            rel = path.relative_to(root)\n            if not spec.match_file(rel.as_posix()):\n                files.append(path)\n        except Exception"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_txt",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_txt",
+      "line_start": 101,
+      "line_end": 108,
+      "docstring": "Decode a tree-sitter node's source text.\n\n    tree-sitter reports BYTE offsets; slicing a str with them silently\n    corrupts every extraction after the first multi-byte character (an\n    em-dash in a comment is enough). Always slice bytes, then decode.",
+      "signature": "def _txt(src: bytes, node: TSNode) -> str:\n    \"\"\"Decode a tree-sitter node's source text.\n\n    tree-sitter reports BYTE offsets; slicing a str with them silently\n    corrupts every extraction after the first multi-byte character (an\n    em-dash in a comment is enough). Always slice bytes, then decode.\n    \"\"\"\n    return src[node.start_byte"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_extract_from_file",
+      "line_start": 111,
+      "line_end": 145,
+      "docstring": null,
+      "signature": "def _extract_from_file(\n    tree, src: bytes, rel_path: str\n) -> tuple[list[Node], list[Edge], list[str]]:\n    nodes: list[Node] = []\n    edges: list[Edge] = []\n    imports: list[str] = []\n\n    content = src.decode(\"utf-8\", errors=\"replace\")\n    lines = content.splitlines()\n    module_node = Node(\n        id=f\"{rel_path}::module\",\n        type=\"module\",\n        file=rel_path,\n        name=rel_path,\n        line_start=1,\n        line_end=max(len(lines), 1),\n        docstring=_get_module_docstring(tree, src),\n    )\n    nodes.append(module_node)\n\n    for node in tree.root_node.children:\n        if node.type == \"import_statement\":\n            imports.extend(_extract_imports(node, src))\n        elif node.type == \"import_from_statement\":\n            imports.extend(_extract_from_imports(node, src))\n        elif node.type in (\"function_definition\", \"async_function_definition\"):\n            func_node, func_edges = _extract_function(node, src, rel_path, module_node.id)\n            nodes.append(func_node)\n            edges.extend(func_edges)\n        elif node.type == \"class_definition\""
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_get_module_docstring",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_get_module_docstring",
+      "line_start": 148,
+      "line_end": 156,
+      "docstring": null,
+      "signature": "def _get_module_docstring(tree, src: bytes) -> Optional[str]:\n    if not tree.root_node.children:\n        return None\n    first = tree.root_node.children[0]\n    if first.type == \"expression_statement\":\n        child = first.child(0)\n        if child and child.type == \"string\""
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_extract_imports",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_extract_imports",
+      "line_start": 159,
+      "line_end": 168,
+      "docstring": null,
+      "signature": "def _extract_imports(node: TSNode, src: bytes) -> list[str]:\n    imports = []\n    for child in node.children:\n        if child.type == \"dotted_name\":\n            imports.append(_txt(src, child))\n        elif child.type == \"aliased_import\":\n            for c in child.children:\n                if c.type == \"dotted_name\""
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_extract_from_imports",
+      "line_start": 171,
+      "line_end": 196,
+      "docstring": null,
+      "signature": "def _extract_from_imports(node: TSNode, src: bytes) -> list[str]:\n    imports = []\n    module_name: Optional[str] = None\n    for child in node.children:\n        if child.type == \"dotted_name\":\n            module_name = _txt(src, child)\n        elif child.type == \"relative_import\":\n            # \"from .parser import X\" \u2014 the relative_import node holds the\n            # dotted path; strip leading dots so \".parser\" resolves to names\n            # exported by the sibling module.\n            parts = [\n                _txt(src, c)\n                for c in child.children\n                if c.type == \"dotted_name\"\n            ]\n            if parts:\n                module_name = \".\".join(parts)\n        elif child.type == \"import_list\":\n            for c in child.children:\n                if c.type in (\"dotted_name\", \"identifier\"):\n                    name = _txt(src, c)\n                    if module_name:\n                        imports.append(f\"{module_name}.{name}\")\n                    else"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_extract_function",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_extract_function",
+      "line_start": 199,
+      "line_end": 232,
+      "docstring": null,
+      "signature": "def _extract_function(\n    node: TSNode, src: bytes, rel_path: str, module_id: str, class_id: Optional[str] = None\n) -> tuple[Node, list[Edge]]:\n    name_node = node.child_by_field_name(\"name\")\n    name = _txt(src, name_node) if name_node else \"unknown\"\n\n    docstring = _get_function_docstring(node, src)\n    signature = _get_signature(node, src)\n\n    # Decide the id at creation (methods nest under their class, free\n    # functions under their module) so edges can reference the final id.\n    func_id = f\"{class_id}.{name}\" if class_id else f\"{rel_path}::{name}\"\n    func_node = Node(\n        id=func_id,\n        type=\"function\",\n        file=rel_path,\n        name=name,\n        line_start=node.start_point[0] + 1,\n        line_end=node.end_point[0] + 1,\n        docstring=docstring,\n        signature=signature,\n    )\n\n    edges = [Edge(from_id=module_id, to_id=func_id, type=\"contains\")]\n\n    # TreeCursor (Node.walk()) is not iterable in py-tree-sitter \u2014 traverse\n    # the subtree manually to collect call sites.\n    for descendant in _iter_descendants(node):\n        if descendant.type == \"call\":\n            call_name = _get_call_name(descendant, src)\n            if call_name"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_extract_class",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_extract_class",
+      "line_start": 235,
+      "line_end": 269,
+      "docstring": null,
+      "signature": "def _extract_class(\n    node: TSNode, src: bytes, rel_path: str, module_id: str\n) -> tuple[list[Node], list[Edge]]:\n    name_node = node.child_by_field_name(\"name\")\n    name = _txt(src, name_node) if name_node else \"unknown\"\n\n    docstring = _get_class_docstring(node, src)\n\n    class_id = f\"{rel_path}::{name}\"\n    class_node = Node(\n        id=class_id,\n        type=\"class\",\n        file=rel_path,\n        name=name,\n        line_start=node.start_point[0] + 1,\n        line_end=node.end_point[0] + 1,\n        docstring=docstring,\n    )\n\n    nodes_out: list[Node] = [class_node]\n    edges: list[Edge] = [Edge(from_id=module_id, to_id=class_id, type=\"contains\")]\n\n    for child in node.children:\n        if child.type == \"block\":\n            for item in child.children:\n                if item.type in (\"function_definition\", \"async_function_definition\")"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_iter_descendants",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_iter_descendants",
+      "line_start": 272,
+      "line_end": 277,
+      "docstring": null,
+      "signature": "def _iter_descendants(root: TSNode):\n    stack = [root]\n    while stack"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_strip_docstring",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_strip_docstring",
+      "line_start": 280,
+      "line_end": 281,
+      "docstring": null,
+      "signature": "def _strip_docstring(raw: str) -> str"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_get_function_docstring",
+      "line_start": 284,
+      "line_end": 293,
+      "docstring": null,
+      "signature": "def _get_function_docstring(node: TSNode, src: bytes) -> Optional[str]:\n    body = node.child_by_field_name(\"body\")\n    if not body or not body.children:\n        return None\n    first = body.children[0]\n    if first.type == \"expression_statement\":\n        child = first.child(0)\n        if child and child.type == \"string\""
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_get_class_docstring",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_get_class_docstring",
+      "line_start": 296,
+      "line_end": 297,
+      "docstring": null,
+      "signature": "def _get_class_docstring(node: TSNode, src: bytes) -> Optional[str]"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_get_signature",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_get_signature",
+      "line_start": 300,
+      "line_end": 304,
+      "docstring": null,
+      "signature": "def _get_signature(node: TSNode, src: bytes) -> str:\n    body = node.child_by_field_name(\"body\")\n    if body:\n        return _txt(src, node).rsplit(\""
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_get_call_name",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_get_call_name",
+      "line_start": 307,
+      "line_end": 317,
+      "docstring": null,
+      "signature": "def _get_call_name(node: TSNode, src: bytes) -> Optional[str]:\n    func = node.child_by_field_name(\"function\")\n    if not func:\n        return None\n    if func.type == \"identifier\":\n        return _txt(src, func)\n    if func.type == \"attribute\":\n        attr = func.child_by_field_name(\"attribute\")\n        if attr"
+    },
+    {
+      "id": "src/codegraph_parser/parser.py::_resolve_import_edges",
+      "type": "function",
+      "file": "src/codegraph_parser/parser.py",
+      "name": "_resolve_import_edges",
+      "line_start": 320,
+      "line_end": 367,
+      "docstring": null,
+      "signature": "def _resolve_import_edges(\n    nodes: list[Node], edges: list[Edge], file_imports: dict[str, list[str]], root: Path\n) -> None:\n    # Index every node under its bare name and its qualified tail so imports\n    # and calls resolve to real nodes.\n    node_by_name: dict[str, Node] = {}\n    for n in nodes:\n        node_by_name.setdefault(n.name, n)\n        node_by_name.setdefault(n.id.split(\"::\")[-1], n)\n\n    existing = {(e.from_id, e.to_id, e.type) for e in edges}\n    resolved: list[Edge] = []\n    node_ids = {n.id for n in nodes}\n\n    def add(edge: Edge) -> None:\n        key = (edge.from_id, edge.to_id, edge.type)\n        if edge.to_id in node_by_name and key not in existing:\n            existing.add(key)\n            resolved.append(edge)\n\n    # imports: file-level import statements \u2192 edges from that file's symbols\n    for file_path, imports in file_imports.items():\n        for imp in imports:\n            parts = imp.split(\".\")\n            for i in range(len(parts), 0, -1):\n                candidate = \".\".join(parts[:i])\n                if candidate in node_by_name:\n                    for n in nodes:\n                        if n.file == file_path and n.type in (\"function\", \"class\"):\n                            add(Edge(from_id=n.id, to_id=node_by_name[candidate].id, type=\"imports\"))\n                    break\n\n    # calls: \"calls\" edges point at bare/attribute names \u2014 rewire them to the\n    # defining node's id so they connect instead of dangling. Compare against\n    # the ID SET, not the name index: a bare call name like `_txt` is a key in\n    # node_by_name while not being any node's id.\n    for e in edges:\n        if e.type == \"calls\" and e.to_id not in node_ids:\n            target = node_by_name.get(e.to_id) or node_by_name.get(e.to_id.split(\".\")[-1])\n            if target and target.id != e.from_id:\n                e.to_id = target.id\n\n    edges.extend(resolved)\n\n    # Prune edges that still reference non-existent nodes (builtin/stdlib\n    # calls like `append` or `len` have no defining node here) so the served\n    # graph is always internally consistent.\n    edges["
+    },
+    {
+      "id": "src/codegraph_parser/cli.py::module",
+      "type": "module",
+      "file": "src/codegraph_parser/cli.py",
+      "name": "src/codegraph_parser/cli.py",
+      "line_start": 1,
+      "line_end": 21,
+      "docstring": null,
+      "signature": null
+    },
+    {
+      "id": "src/codegraph_parser/cli.py::main",
+      "type": "function",
+      "file": "src/codegraph_parser/cli.py",
+      "name": "main",
+      "line_start": 6,
+      "line_end": 17,
+      "docstring": null,
+      "signature": "def main() -> None:\n    if len(sys.argv) < 2:\n        print(\"Usage"
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::module",
+      "type": "module",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "src/codegraph_parser/graph_store.py",
+      "line_start": 1,
+      "line_end": 80,
+      "docstring": null,
+      "signature": null
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore",
+      "type": "class",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "GraphStore",
+      "line_start": 6,
+      "line_end": 80,
+      "docstring": null,
+      "signature": null
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore.__init__",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "__init__",
+      "line_start": 7,
+      "line_end": 9,
+      "docstring": null,
+      "signature": "def __init__(self, graph_data: GraphData)"
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore._build_graph",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "_build_graph",
+      "line_start": 11,
+      "line_end": 25,
+      "docstring": null,
+      "signature": "def _build_graph(self, graph_data: GraphData) -> None:\n        for node in graph_data.nodes:\n            self.graph.add_node(node.id, **node.__dict__)\n        for edge in graph_data.edges:\n            self.graph.add_edge(edge.from_id, edge.to_id, type=edge.type)\n\n        # Defensive: parser guarantees ids, but never trust a dangling edge \u2014\n        # an endpoint without a node would break subgraph/explain queries.\n        dangling = [\n            (u, v)\n            for u, v in self.graph.edges\n            if u not in self.graph or v not in self.graph\n        ]\n        for u, v in dangling"
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore.get_neighbors",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "get_neighbors",
+      "line_start": 27,
+      "line_end": 40,
+      "docstring": null,
+      "signature": "def get_neighbors(self, node_id: str, depth: int = 1) -> list[str]:\n        if node_id not in self.graph:\n            return []\n        neighbors: set[str] = set()\n        current = {node_id}\n        for _ in range(depth):\n            next_level: set[str] = set()\n            for n in current"
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore.get_subgraph_for_query",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "get_subgraph_for_query",
+      "line_start": 42,
+      "line_end": 66,
+      "docstring": null,
+      "signature": "def get_subgraph_for_query(self, keywords: list[str], max_nodes: int = 20) -> list[str]:\n        scored: dict[str, int] = {}\n        for node_id, data in self.graph.nodes(data=True):\n            score = 0\n            name = str(data.get(\"name\", \"\")).lower()\n            file = str(data.get(\"file\", \"\")).lower()\n            docstring = str(data.get(\"docstring\") or \"\").lower()\n            for kw in keywords:\n                kw_lower = kw.lower()\n                if kw_lower in name:\n                    score += 3\n                if kw_lower in file:\n                    score += 2\n                if kw_lower in docstring:\n                    score += 1\n            if score > 0:\n                scored[node_id] = score\n\n        seeds = sorted(scored.keys(), key=lambda k: scored[k], reverse=True)[:5]\n\n        expanded: set[str] = set(seeds)\n        for seed in seeds:\n            expanded.update(self.get_neighbors(seed, depth=2))\n\n        return list(expanded)["
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore.get_node_data",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "get_node_data",
+      "line_start": 68,
+      "line_end": 71,
+      "docstring": null,
+      "signature": "def get_node_data(self, node_id: str) -> Optional[dict]:\n        if node_id in self.graph"
+    },
+    {
+      "id": "src/codegraph_parser/graph_store.py::GraphStore.to_graph_data",
+      "type": "function",
+      "file": "src/codegraph_parser/graph_store.py",
+      "name": "to_graph_data",
+      "line_start": 73,
+      "line_end": 80,
+      "docstring": null,
+      "signature": "def to_graph_data(self) -> GraphData:\n        nodes = []\n        edges = []\n        for node_id, data in self.graph.nodes(data=True):\n            nodes.append(Node(**{k: v for k, v in data.items() if k in Node.__annotations__}))\n        for u, v, data in self.graph.edges(data=True)"
+    }
+  ],
+  "edges": [
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::parse_repo",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::parse_repo",
+      "to_id": "src/codegraph_parser/parser.py::_resolve_import_edges",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::parse_repo",
+      "to_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::parse_repo",
+      "to_id": "src/codegraph_parser/parser.py::_walk_python_files",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::parse_repo",
+      "to_id": "src/codegraph_parser/parser.py::_load_gitignore",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_load_gitignore",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_walk_python_files",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "to_id": "src/codegraph_parser/parser.py::_extract_class",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "to_id": "src/codegraph_parser/parser.py::_extract_function",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "to_id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "to_id": "src/codegraph_parser/parser.py::_extract_imports",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_file",
+      "to_id": "src/codegraph_parser/parser.py::_get_module_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_get_module_docstring",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_module_docstring",
+      "to_id": "src/codegraph_parser/parser.py::_strip_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_module_docstring",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_extract_imports",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_imports",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_imports",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_from_imports",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_extract_function",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_function",
+      "to_id": "src/codegraph_parser/parser.py::_get_call_name",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_function",
+      "to_id": "src/codegraph_parser/parser.py::_iter_descendants",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_function",
+      "to_id": "src/codegraph_parser/parser.py::_get_signature",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_function",
+      "to_id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_function",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_extract_class",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_class",
+      "to_id": "src/codegraph_parser/parser.py::_extract_function",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_class",
+      "to_id": "src/codegraph_parser/parser.py::_get_class_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_extract_class",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_iter_descendants",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_strip_docstring",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "to_id": "src/codegraph_parser/parser.py::_strip_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_get_class_docstring",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_class_docstring",
+      "to_id": "src/codegraph_parser/parser.py::_get_function_docstring",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_get_signature",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_signature",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_signature",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_get_call_name",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_call_name",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::_get_call_name",
+      "to_id": "src/codegraph_parser/parser.py::_txt",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/parser.py::module",
+      "to_id": "src/codegraph_parser/parser.py::_resolve_import_edges",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/cli.py::module",
+      "to_id": "src/codegraph_parser/cli.py::main",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/cli.py::main",
+      "to_id": "src/codegraph_parser/parser.py::parse_repo",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.__init__",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::GraphStore.__init__",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore._build_graph",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore._build_graph",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.get_neighbors",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.get_subgraph_for_query",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::GraphStore.get_subgraph_for_query",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.get_neighbors",
+      "type": "calls"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.get_node_data",
+      "type": "contains"
+    },
+    {
+      "from_id": "src/codegraph_parser/graph_store.py::module",
+      "to_id": "src/codegraph_parser/graph_store.py::GraphStore.to_graph_data",
+      "type": "contains"
+    }
+  ]
+}

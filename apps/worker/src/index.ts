@@ -1,8 +1,27 @@
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 
 import { analyzeRepo } from "./jobs/analyzeRepo";
+import { assertMigrationsApplied } from "@vibe-coder/database/migrations";
+
+// Load .env — try CWD first, then walk up to workspace root (same policy as
+// apps/api/src/config.ts; the worker previously relied on bare dotenv/config).
+const rootEnv = resolve(process.cwd(), ".env");
+const workspaceRoot = resolve(process.cwd(), "../../.env");
+for (const p of [rootEnv, workspaceRoot]) {
+  if (existsSync(p)) {
+    loadEnv({ path: p });
+    break;
+  }
+}
+
+// Fail fast on schema drift (PRD-I03): a worker that accepts jobs against a
+// schema-mismatched database burns a clone + a job per attempt. Better to die
+// loudly at boot — in Railway that shows as a failed deploy.
+assertMigrationsApplied();
 
 const connection = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: null,
