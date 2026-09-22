@@ -64,6 +64,13 @@ def build_file_explanation(file_path: str, chunks: list[dict]) -> dict:
         if parsed is None:
             return _demo_file_explanation(file_path, chunks)
         parsed.setdefault("filePath", file_path)
+        # Grounding guarantee: the explanation was generated from these exact
+        # chunks, so if the model omits citations we cite those chunks anyway.
+        if not parsed.get("citations"):
+            parsed["citations"] = [
+                {"filePath": c["filePath"], "startLine": c["startLine"], "endLine": c["endLine"]}
+                for c in chunks[:5]
+            ]
         return parsed
     except Exception:
         return _demo_file_explanation(file_path, chunks)

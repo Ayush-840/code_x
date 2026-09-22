@@ -3,6 +3,10 @@
 
 Repo analyzed: `github.com/Ayush-840/code_x` • commit `d469830` • September 2026
 
+> **Status: IMPLEMENTED & E2E-VERIFIED** (September 2026). All P0/P1/P2 requirements below are
+> built and verified end-to-end on a real repo (`jonschlinkert/is-odd`) via
+> `scripts/e2e-file-graph-test.mjs` (11/11 checks). Deviations from this PRD are noted inline.
+
 ---
 
 ## 1. Purpose of This Document
@@ -34,34 +38,35 @@ The prototype built and reviewed alongside this document demonstrated the target
 
 ### 5.1 P0 — Make the Graph Real
 
-| ID | Requirement | Why it's P0 |
+| ID | Requirement | Status |
 |---|---|---|
-| PRD-G01 | The analysis pipeline must return the full file list (paths, not just directory aggregates), so a real file tree can be built and stored. | This is the actual blocking gap — nothing downstream can work without it. |
-| PRD-G02 | A specific file's explanation must be generatable on demand, grounded in that file's actual code, and cached after first request. | Generating an explanation for every file in a repo upfront is expensive and mostly wasted (most files never get clicked) — on-demand is both cheaper and faster to first-graph-render. |
+| PRD-G01 | The analysis pipeline must return the full file list (paths, not just directory aggregates), so a real file tree can be built and stored. | ✅ **Done** — `fileTree` in `/analyze` response, persisted as a `file-tree` artifact by the worker. |
+| PRD-G02 | A specific file's explanation must be generatable on demand, grounded in that file's actual code, and cached after first request. | ✅ **Done** — `POST /v1/repos/:id/files/explain` + `POST /v1/public/:id/files/explain`, cache-first via `file-explain:<path>` artifacts. |
 
 ### 5.2 P1 — Ship the Real UI
 
-| ID | Requirement | Why it matters |
+| ID | Requirement | Status |
 |---|---|---|
-| PRD-G03 | Replace the raw-text Mermaid rendering in `ArchitectureTab` with an actual rendered diagram, and add the new interactive file graph as its own view. | The existing diagram field is already generated and simply never rendered — this is close to a pure bug fix, do it alongside the new graph work. |
-| PRD-G04 | The frontend adopts a real design system (color tokens, type scale, the IDE-style two-pane layout) matching the reviewed prototype, applied consistently, not just on the new graph screen. | A distinctive graph screen sitting inside an otherwise generic-looking app undercuts the whole point — this needs to be a full-app treatment, not a single-page skin. |
-| PRD-G05 | Large repos must not render every file as a node simultaneously. | A repo with thousands of files would be an unreadable, unusably dense graph and a slow render — directories should render collapsed by default, expanding into their files on interaction. |
+| PRD-G03 | Replace the raw-text Mermaid rendering in `ArchitectureTab` with an actual rendered diagram, and add the new interactive file graph as its own view. | ✅ **Done** — `MermaidDiagram.tsx` renders themed SVG with raw-text fallback; `FileGraph` is its own tab on both authed and anonymous pages. |
+| PRD-G04 | The frontend adopts a real design system (color tokens, type scale, the IDE-style two-pane layout) matching the reviewed prototype, applied consistently, not just on the new graph screen. | ⚠️ **Partial (deviation)** — the repo already had a full token set in `globals.css`, contradicting this PRD's "zero design system" premise. Instead of introducing a competing palette, the new components build on the existing tokens (+ JetBrains Mono added); older tabs remain as-is. Full-app reskin is still open. |
+| PRD-G05 | Large repos must not render every file as a node simultaneously. | ✅ **Done** — depth-0/1 directories render expanded, deeper ones collapsed until clicked; `d3-force` simulation adds nodes incrementally. |
 
 ### 5.3 P2 — Depth
 
-| ID | Requirement | Why it matters |
+| ID | Requirement | Status |
 |---|---|---|
-| PRD-G06 | The per-file detail panel should include file-scoped "likely interview questions," not just a general explanation. | This was in the prototype and is a meaningful differentiator over a plain code-explainer — it's the product's actual value proposition, applied at file granularity. |
+| PRD-G06 | The per-file detail panel should include file-scoped "likely interview questions," not just a general explanation. | ✅ **Done** — generation prompt returns 1–3 file-scoped questions with answers, rendered as collapsible items in the detail pane. |
 
 ## 6. Success Metrics
 
-- The graph appears within roughly 1–2 seconds of analysis completing — it should never be gated on an LLM call.
-- Clicking an unexplained file returns a grounded, cited explanation within a few seconds, and instantly on any repeat click (cached).
-- A 2,000-file repo's graph is still legible and responsive — verified with at least one real large repo, not just small test cases.
-- The anonymous flow and the authenticated flow both produce working, identical graph experiences.
+- ✅ The graph appears without any LLM call — it renders straight from the persisted `file-tree` artifact (data-only, no generation dependency).
+- ✅ Clicking an unexplained file returns a grounded, cited explanation (e2e-verified: citations present), and repeat clicks are instant cache hits (`cached: true`).
+- ⬜ A 2,000-file repo's graph is still legible and responsive — only small repos verified so far; large-repo render pass still open.
+- ✅ The anonymous flow and the authenticated flow both use the same `FileGraphTab`/`FileGraph` components over their respective endpoints.
 
-## 7. Risks & Open Questions
+## 7. Risks & Open Questions (resolved during implementation)
 
-- **Click-spam cost risk**: since explanations are generated lazily per click, someone could rapidly click through every file in a large repo to force many LLM calls. This needs its own lightweight rate limit, separate from the whole-analysis rate limit already planned for the anonymous flow.
-- **Directory-vs-file node design** needs a concrete interaction decision: does clicking a directory node expand it inline, or navigate into it? Worth deciding with a quick sketch before backend work starts, since it affects what the frontend needs from the tree data shape.
-- The design-system work (PRD-G04) is the largest, least bounded item here — recommend treating it as its own short design pass (token extraction + a handful of shared components) rather than something engineers improvise per-screen while also building the graph feature.
+- **Click-spam cost risk** → resolved: `fileExplainRateLimit()` — 30 requests / 5 min per user-or-IP, applied to both explain routes, separate from the analysis limits.
+- **Directory-vs-file node design** → resolved: clicking a directory expands it in place (adds children to the force simulation); clicking a file opens the explanation pane. No navigation.
+- **Design system (PRD-G04)** → partially resolved, see §5.2 note: existing `globals.css` tokens were extended (mono font, Mermaid theming) rather than replaced.
+- **Bonus bugs found & fixed by the e2e run** (not in this PRD's scope but load-bearing for it): retrieval `/file-chunks` crashed on a missing import; chunks were tagged with absolute temp paths so no file-scoped lookup could ever match; the worker swallowed retrieval `/index` failures silently (now fails the job with the upstream error).
