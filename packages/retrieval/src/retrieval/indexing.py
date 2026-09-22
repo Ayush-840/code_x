@@ -38,6 +38,8 @@ def index_chunks(repo_id: str, chunks: list[dict]) -> int:
     # Import embedder lazily to avoid circular imports
     from .search import _get_embedder
 
+    from .sanitize import sanitize_chunk_text
+
     embedder = _get_embedder()
 
     # Load existing chunks for reuse of unchanged embeddings
@@ -48,7 +50,10 @@ def index_chunks(repo_id: str, chunks: list[dict]) -> int:
     for i, chunk in enumerate(chunks):
         start = int(chunk.get("startLine", 1))
         file_path = str(chunk.get("filePath", f"chunk-{i}"))
-        text = str(chunk.get("text", ""))
+        # Multimodal embedders 400 on base64 data-URIs inside text; strip
+        # them before hashing/embedding so every consumer (dense, BM25,
+        # chat grounding) sees clean code.
+        text = sanitize_chunk_text(str(chunk.get("text", "")))
         cid = _chunk_id(repo_id, file_path, start)
         th = _text_hash(text)
 

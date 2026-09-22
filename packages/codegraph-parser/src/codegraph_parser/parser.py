@@ -169,35 +169,33 @@ def _extract_imports(node: TSNode, src: bytes) -> list[str]:
 
 
 def _extract_from_imports(node: TSNode, src: bytes) -> list[str]:
-    imports = []
-    module_name: Optional[str] = None
+    """Extract imports from `from X import a, b` statements, positional on the
+    tree: module = children before the `import` keyword, imported names =
+    after. Handles the single-name case where there is no `import_list` node
+    (a bare `dotted_name` sits directly after `import`)."""
+    imports: list[str] = []
+    module_parts: list[str] = []
+    names: list[str] = []
+    seen_import_kw = False
     for child in node.children:
-        if child.type == "dotted_name":
-            module_name = _txt(src, child)
-        elif child.type == "relative_import":
-            # "from .parser import X" — the relative_import node holds the
-            # dotted path; strip leading dots so ".parser" resolves to names
-            # exported by the sibling module.
-            parts = [
-                _txt(src, c)
-                for c in child.children
-                if c.type == "dotted_name"
-            ]
-            if parts:
-                module_name = ".".join(parts)
-        elif child.type == "import_list":
-            for c in child.children:
-                if c.type in ("dotted_name", "identifier"):
-                    name = _txt(src, c)
-                    if module_name:
-                        imports.append(f"{module_name}.{name}")
-                    else:
-                        imports.append(name)
+        if child.type == "import":
+            seen_import_kw = True
+            continue
+        if child.type == "relative_import":
+            module_parts.append(_txt(src, child).replace(".", "").strip())
+            continue
+        if not seen_import_kw and child.type == "dotted_name":
+            module_parts.append(_txt(src, child))
+        elif seen_import_kw and child.type in ("dotted_name", "identifier"):
+            names.append(_txt(src, child))
+    module = "".join(module_parts)
+    for name in names:
+        imports.append(f"{module}.{name}" if module else name)
     return imports
 
 
 def _extract_function(
-    node: TSNode, src: bytes, rel_path: str, module_id: str, class_id: Optional[str] = None
+    node: TSNode, src: bytes, rel_path: str, container_id: str, class_id: Optional[str] = None
 ) -> tuple[Node, list[Edge]]:
     name_node = node.child_by_field_name("name")
     name = _txt(src, name_node) if name_node else "unknown"
@@ -219,7 +217,7 @@ def _extract_function(
         signature=signature,
     )
 
-    edges = [Edge(from_id=module_id, to_id=func_id, type="contains")]
+    edges = [Edge(from_id=container_id, to_id=func_id, type="contains")]
 
     # TreeCursor (Node.walk()) is not iterable in py-tree-sitter — traverse
     # the subtree manually to collect call sites.
@@ -258,10 +256,10 @@ def _extract_class(
         if child.type == "block":
             for item in child.children:
                 if item.type in ("function_definition", "async_function_definition"):
-                    # class_id passed through so the method node is created
-                    # with its final id — and it is actually collected.
+                    # Methods nest under their CLASS (contains edge from the
+                    # class, id qualified by it) — and are actually collected.
                     method_node, method_edges = _extract_function(
-                        item, src, rel_path, module_id, class_id
+                        item, src, rel_path, class_id, class_id
                     )
                     nodes_out.append(method_node)
                     edges.extend(method_edges)
@@ -326,6 +324,19 @@ def _resolve_import_edges(
     for n in nodes:
         node_by_name.setdefault(n.name, n)
         node_by_name.setdefault(n.id.split("::")[-1], n)
+        if n.type == "module":
+            # Index modules by stem and path so `from .nodes import x` and
+            # `from pkg import nodes` can resolve to the module node.
+            stem = Path(n.file).stem
+            node_by_name.setdefault(stem, n)
+            node_by_name.setdefault(n.file, n)
+            node_by_name.setdefault(n.file.removesuffix(".py"), n)
+        elif n.type in ("function", "class"):
+            # Composite keys so `from .nodes import make_node` resolves to the
+            # symbol itself, not just its module.
+            stem = Path(n.file).stem
+            node_by_name.setdefault(f"{stem}.{n.name}", n)
+            node_by_name.setdefault(f"{n.file.removesuffix('.py')}.{n.name}", n)
 
     existing = {(e.from_id, e.to_id, e.type) for e in edges}
     resolved: list[Edge] = []
@@ -333,7 +344,8 @@ def _resolve_import_edges(
 
     def add(edge: Edge) -> None:
         key = (edge.from_id, edge.to_id, edge.type)
-        if edge.to_id in node_by_name and key not in existing:
+        # Gate on the ID SET: import targets are node ids, not name-index keys.
+        if edge.to_id in node_ids and key not in existing:
             existing.add(key)
             resolved.append(edge)
 
