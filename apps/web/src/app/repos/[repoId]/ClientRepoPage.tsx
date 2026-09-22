@@ -10,9 +10,19 @@ import { QuestionsTab } from "@/components/tabs/QuestionsTab";
 import { ChatTab } from "@/components/tabs/ChatTab";
 import { MockInterviewTab } from "@/components/tabs/MockInterviewTab";
 import { DeploymentTab } from "@/components/tabs/DeploymentTab";
+import { FileGraphTab } from "@/components/FileGraphTab";
+import type { FileTreeNode } from "@/components/FileGraph";
 import { useRouter } from "next/navigation";
 
-type Tab = "architecture" | "modules" | "questions" | "chat" | "interview" | "deployment";
+interface FileExplanation {
+  summary?: string;
+  sections?: { heading: string; text: string }[];
+  questions?: { question: string; answer: string }[];
+  citations?: { filePath: string; startLine: number; endLine: number }[];
+  isDemo?: boolean;
+}
+
+type Tab = "architecture" | "filegraph" | "modules" | "questions" | "chat" | "interview" | "deployment";
 
 interface Repo {
   id: string;
@@ -25,6 +35,7 @@ interface Repo {
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "architecture", label: "Architecture",   icon: "🏗️" },
+  { key: "filegraph",    label: "File Graph",      icon: "🗂️" },
   { key: "modules",      label: "Modules",         icon: "🧩" },
   { key: "questions",    label: "Question Bank",   icon: "❓" },
   { key: "chat",         label: "Ask",             icon: "💬" },
@@ -140,6 +151,17 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
 
         {/* Tab content */}
         {activeTab === "architecture" && <ArchitectureTab repoId={repoId} />}
+        {activeTab === "filegraph" && (
+          <FileGraphTab
+            fetchTree={async () => {
+              const art = await api.get<{ content: FileTreeNode }>(`/repos/${repoId}/file-tree`);
+              return art.content ?? (art as unknown as FileTreeNode);
+            }}
+            explainFile={(path) =>
+              api.post<FileExplanation>(`/repos/${repoId}/files/explain`, { path })
+            }
+          />
+        )}
         {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
         {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}
         {activeTab === "chat"         && <ChatTab repoId={repoId} socket={socket} />}

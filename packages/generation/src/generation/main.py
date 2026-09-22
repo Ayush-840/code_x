@@ -17,6 +17,7 @@ from .llm import complete
 from .architecture import build_architecture
 from .modules import build_module_explanations
 from .questions import build_question_bank
+from .files import build_file_explanation
 
 app = FastAPI(title="Vibe Coder Generation Service")
 
@@ -40,6 +41,11 @@ class QuestionsReq(BaseModel):
     modules: list[dict]
 
 
+class FileExplainReq(BaseModel):
+    repoId: str
+    filePath: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "generation"}
@@ -58,6 +64,28 @@ def generate_artifacts(req: GenerateReq) -> list[dict]:
 @app.post("/questions")
 def generate_question_bank(req: QuestionsReq) -> dict:
     return build_question_bank(req.repoId, req.modules)
+
+
+@app.post("/file-explain")
+def file_explain(req: FileExplainReq) -> dict:
+    """Grounded explanation of ONE file (PRD-G02): pull that file's chunks from
+    the retrieval service, generate on demand, cache upstream (API layer)."""
+    chunks = _file_chunks(req.repoId, req.filePath)
+    return build_file_explanation(req.filePath, chunks)
+
+
+def _file_chunks(repo_id: str, file_path: str) -> list[dict]:
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{RETRIEVAL_URL}/file-chunks",
+                json={"repoId": repo_id, "filePath": file_path},
+            )
+            if resp.status_code == 200:
+                return resp.json().get("chunks", [])
+    except Exception as exc:  # pragma: no cover
+        print(f"[generation] retrieval unavailable for file chunks: {exc}")
+    return []
 
 
 @app.post("/chat")

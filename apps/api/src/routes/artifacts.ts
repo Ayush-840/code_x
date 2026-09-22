@@ -18,7 +18,7 @@ router.get("/:repoId/artifacts", async (req: AuthedRequest, res, next) => {
 });
 
 router.get(
-  "/:repoId/:artifactType(architecture|modules|questions|dependency-graph|deployment)",
+  "/:repoId/:artifactType(architecture|modules|questions|dependency-graph|deployment|file-tree)",
   async (req: AuthedRequest, res, next) => {
     try {
       const artifact = await prisma.artifact.findFirst({

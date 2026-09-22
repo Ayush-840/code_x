@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthedFetch } from "@/lib/api";
+import { MermaidDiagram } from "@/components/MermaidDiagram";
 
 interface Component { name: string; role: string; dependsOn: string[]; }
 interface EntryPoint { path?: string; module?: string; }
@@ -106,11 +107,11 @@ export function ArchitectureTab({ repoId }: { repoId: string }) {
         </div>
       )}
 
-      {/* Diagram */}
+      {/* Diagram — rendered, not raw text (PRD-G03) */}
       {arch.diagram && (
         <div className="card">
           <h3 style={S.cardH}>Architecture Diagram</h3>
-          <pre className="code-block" style={{ fontSize: 12 }}>{arch.diagram}</pre>
+          <MermaidDiagram chart={arch.diagram} />
         </div>
       )}
     </div>

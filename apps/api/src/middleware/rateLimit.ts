@@ -33,3 +33,21 @@ export function anonymousRateLimit(action: "analyze" | "status") {
     keyGenerator: (req) => req.ip ?? "unknown",
   });
 }
+
+// File explanations are generated lazily per click (PRD-G02), so each request
+// can trigger an LLM call. Separate, tighter limit than the whole-analysis
+// limits — guards against click-spam forcing many generations (PRD Risks).
+const FILE_EXPLAIN_WINDOW_MS = 5 * 60_000;
+const FILE_EXPLAIN_MAX = 30;
+
+export function fileExplainRateLimit() {
+  return rateLimit({
+    windowMs: FILE_EXPLAIN_WINDOW_MS,
+    max: FILE_EXPLAIN_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    // req.userId is set by requireAuth; anonymous requests fall back to IP.
+    keyGenerator: (req) =>
+      (req as unknown as { userId?: string }).userId ?? req.ip ?? "unknown",
+  });
+}

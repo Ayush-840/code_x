@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Design Tokens ───────────────────────────────────────── */
 :root {
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* brand */
   --brand-50:  #f0fdf9;
@@ -62,6 +63,32 @@
   --shadow-md: 0 4px 20px rgba(0,0,0,.5);
   --shadow-lg: 0 8px 40px rgba(0,0,0,.6);
   --shadow-xl: 0 20px 60px rgba(0,0,0,.7);
+}
+
+/* ── Mermaid diagram theming ─────────────────────────────── */
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  background: transparent;
+}
+.mermaid-container .node rect,
+.mermaid-container .node polygon,
+.mermaid-container .node circle {
+  fill: var(--surface-3);
+  stroke: var(--brand-500);
+}
+.mermaid-container .edgePath .path {
+  stroke: var(--gray-600);
+}
+.mermaid-container .edgeLabel,
+.mermaid-container .nodeLabel {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.mermaid-container .cluster rect {
+  fill: rgba(20,184,166,.05);
+  stroke: rgba(20,184,166,.25);
 }
 
 /* ── Reset & Base ────────────────────────────────────────── */

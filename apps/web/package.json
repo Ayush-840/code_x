@@ -11,12 +11,15 @@
   },
   "dependencies": {
     "@vibe-coder/shared": "workspace:*",
+    "d3-force": "^3.0.0",
+    "mermaid": "^12.0.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "socket.io-client": "^4.7.0"
   },
   "devDependencies": {
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

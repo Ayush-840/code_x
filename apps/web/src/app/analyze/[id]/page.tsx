@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
+import { FileGraphTab } from "@/components/FileGraphTab";
+import type { FileTreeNode } from "@/components/FileGraph";
+
+interface FileExplanation {
+  summary?: string;
+  sections?: { heading: string; text: string }[];
+  questions?: { question: string; answer: string }[];
+  citations?: { filePath: string; startLine: number; endLine: number }[];
+  isDemo?: boolean;
+}
 
 interface Module {
   id?: string;
@@ -38,8 +48,7 @@ export default function PublicAnalysisPage() {
   const params = useParams();
   const id = params.id as string;
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"modules" | "architecture" | "deployment">("modules");
+  const [error, setError] = useState<string | null>(null);    const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "deployment">("modules");
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
@@ -133,7 +142,7 @@ export default function PublicAnalysisPage() {
 
       <div style={S.content}>
         <nav style={S.tabBar}>
-          {(["modules", "architecture", "deployment"] as const).map((t) => (
+          {(["modules", "files", "architecture", "deployment"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -144,6 +153,7 @@ export default function PublicAnalysisPage() {
               }}
             >
               {t === "modules" && "🧩 "}
+              {t === "files" && "🗂️ "}
               {t === "architecture" && "🏗️ "}
               {t === "deployment" && "🚀 "}
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -183,6 +193,21 @@ export default function PublicAnalysisPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {activeTab === "files" && (
+          <FileGraphTab
+            fetchTree={async () => {
+              const fileTreeArtifact = result.artifacts.find(
+                (a) => a.artifactType === "file-tree"
+              );
+              if (!fileTreeArtifact) throw new Error("No file tree for this analysis");
+              return fileTreeArtifact.content as unknown as FileTreeNode;
+            }}
+            explainFile={(path) =>
+              publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path })
+            }
+          />
         )}
 
         {activeTab === "architecture" && (

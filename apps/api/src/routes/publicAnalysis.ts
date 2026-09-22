@@ -4,7 +4,7 @@ import { prisma } from "../db";
 import { analysisQueue } from "../redis";
 import { HttpError, ok } from "../middleware/errors";
 import { notifyProgress } from "../services/analysis";
-import { anonymousRateLimit } from "../middleware/rateLimit";
+import { anonymousRateLimit, fileExplainRateLimit } from "../middleware/rateLimit";
 import { requireAuth, type AuthedRequest } from "../middleware/auth";
 
 const router = Router();
@@ -200,5 +200,100 @@ router.post("/:id/claim", requireAuth, async (req: AuthedRequest, res, next) => 
     next(err);
   }
 });
+
+const EXPLAIN_TIMEOUT_MS = 60_000;
+
+interface FileExplanation {
+  filePath?: string;
+  summary?: string;
+  sections?: { heading: string; text: string }[];
+  questions?: { question: string; answer: string }[];
+  citations?: { filePath: string; startLine: number; endLine: number }[];
+  isDemo?: boolean;
+}
+
+/**
+ * POST /:id/files/explain { path } — per-file explanation for anonymous
+ * analyses (PRD-G02): cache-first, lazily generated, IP rate-limited against
+ * click-spam (each miss triggers an LLM call).
+ */
+router.post(
+  "/:id/files/explain",
+  fileExplainRateLimit(),
+  anonymousRateLimit("status"),
+  async (req, res, next) => {
+    try {
+      const { path } = req.body as { path?: string };
+      if (!path || typeof path !== "string") {
+        throw new HttpError(400, "VALIDATION_ERROR", "path is required");
+      }
+
+      const pa = await prisma.publicAnalysis.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, repoId: true, expiresAt: true },
+      });
+      if (!pa) throw new HttpError(404, "NOT_FOUND", "Analysis not found");
+      if (pa.expiresAt && pa.expiresAt < new Date()) {
+        throw new HttpError(410, "EXPIRED", "This analysis has expired");
+      }
+      if (!pa.repoId) {
+        throw new HttpError(400, "NO_REPO", "No repository data for this analysis");
+      }
+
+      const artifactType = `file-explain:${path}`;
+      const cached = await prisma.artifact.findFirst({
+        where: { repoId: pa.repoId, artifactType },
+        orderBy: { version: "desc" },
+      });
+      if (cached) {
+        ok(res, { ...(cached.content as FileExplanation), cached: true });
+        return;
+      }
+
+      let explanation: FileExplanation;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), EXPLAIN_TIMEOUT_MS);
+      try {
+        const genRes = await fetch(
+          `${process.env.GENERATION_SERVICE_URL ?? "http://localhost:8300"}/file-explain`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ repoId: pa.repoId, filePath: path }),
+            signal: controller.signal,
+          }
+        );
+        if (!genRes.ok) {
+          throw new HttpError(
+            502,
+            "GENERATION_FAILED",
+            "File explanation generation failed — try again shortly"
+          );
+        }
+        explanation = (await genRes.json()) as FileExplanation;
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        throw new HttpError(
+          502,
+          "GENERATION_UNAVAILABLE",
+          "Generation service unavailable — try again shortly"
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+
+      await prisma.artifact.create({
+        data: {
+          repoId: pa.repoId,
+          artifactType,
+          content: explanation as unknown as import("@vibe-coder/database").Prisma.InputJsonValue,
+        },
+      });
+      ok(res, { ...explanation, cached: false });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

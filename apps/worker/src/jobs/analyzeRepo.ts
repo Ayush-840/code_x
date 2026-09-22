@@ -205,8 +205,16 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       modules: { name: string; path: string; fileCount: number; lineCount: number }[];
       symbols: unknown[];
       chunks: { text: string; filePath: string; startLine: number; endLine: number }[];
+      fileTree?: FileTreeNode;
     };
     if (!parseRes.ok) throw new Error("analysis service failed");
+
+    interface FileTreeNode {
+      name: string;
+      path: string;
+      kind: "dir" | "file";
+      children: FileTreeNode[];
+    }
 
     for (const mod of parsed.modules) {
       await prisma.codeModule.upsert({
@@ -225,13 +233,22 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       });
     }
 
-    // 3. INDEX
+    // 3. INDEX — validated: a silent failure here would leave chat and the
+    // per-file explainer with no grounded chunks to work from.
     await progress(jobId, "CHUNKING", 45, "Indexing code");
-    await fetch(`${RETRIEVAL_URL}/index`, {
+    const indexRes = await fetch(`${RETRIEVAL_URL}/index`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jobId, repoId, chunks: parsed.chunks }),
     });
+    if (!indexRes.ok) {
+      const detail = await indexRes.text().catch(() => "");
+      throw new Error(
+        `retrieval indexing failed (HTTP ${indexRes.status}): ${detail.slice(0, 200)}`
+      );
+    }
+    const { indexed } = (await indexRes.json().catch(() => ({ indexed: -1 }))) as { indexed?: number };
+    console.log(`[worker] Indexed ${indexed} chunk(s) for ${fullName}`);
     await progress(jobId, "EMBEDDING", 60, "Embedding vectors");
 
     // 4. GENERATE
@@ -269,6 +286,21 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
         content: (deploymentInfo ?? {}) as import("@vibe-coder/database").Prisma.InputJsonValue,
       },
     });
+
+    // 4c. SAVE FILE-TREE ARTIFACT (PRD-G01) — the real per-file structure from
+    // the parser, persisted so the frontend can render the file graph without
+    // waiting on (or paying for) any LLM call. Always written; an empty tree
+    // (root with no children) is the honest "nothing parseable" state.
+    if (parsed.fileTree) {
+      await prisma.artifact.create({
+        data: {
+          repoId,
+          jobId,
+          artifactType: "file-tree",
+          content: parsed.fileTree as unknown as import("@vibe-coder/database").Prisma.InputJsonValue,
+        },
+      });
+    }
 
     // 5. DONE
     await progress(jobId, "DONE", 100, "Analysis complete");

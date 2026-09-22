@@ -11,6 +11,7 @@ import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
 import repoRoutes from "./routes/repos";
 import artifactRoutes from "./routes/artifacts";
+import fileExplainRoutes from "./routes/fileExplain";
 import chatRoutes from "./routes/chat";
 import mockInterviewRoutes from "./routes/mockInterviews";
 import usageRoutes from "./routes/usage";
@@ -47,6 +48,7 @@ export function createApp() {
   app.use("/v1/users", requireAuth, userRoutes);
   app.use("/v1/repos", requireAuth, repoRoutes);
   app.use("/v1/repos", requireAuth, artifactRoutes);
+  app.use("/v1/repos", requireAuth, fileExplainRoutes);
   app.use("/v1/chat", requireAuth, chatRoutes);
   app.use("/v1", requireAuth, mockInterviewRoutes);
   app.use("/v1/usage", requireAuth, usageRoutes);
