@@ -12,6 +12,8 @@
 const API_URL = process.env.API_URL ?? "http://localhost:4002";
 const REPO_URL = process.env.REPO_URL ?? "https://github.com/vercel/ms";
 const TIMEOUT_MS = 240_000;
+// Optional bar for large-repo validation runs (e.g. MIN_FILES=1000).
+const MIN_FILES = Number(process.env.MIN_FILES ?? 0);
 
 const log = (...a) => console.log(...a);
 const checks = [];
@@ -85,6 +87,13 @@ check(
   treeFileCount > 0 && treeFileCount === moduleFileCount,
   `tree=${treeFileCount} modules=${moduleFileCount}`
 );
+if (MIN_FILES > 0) {
+  check(
+    `large repo: tree has ≥ ${MIN_FILES} files`,
+    treeFileCount >= MIN_FILES,
+    `tree=${treeFileCount}`
+  );
+}
 
 // ── 4. files/explain: first call generates, second is cached ──
 // Pick a real file path from the tree (prefer a source file).

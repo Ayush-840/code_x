@@ -42,12 +42,20 @@ interface FileExplanation {
 
 /* ── Tree → graph (visible subset only) ──────────────────── */
 
-function countFiles(node: FileTreeNode): number {
+export function countFiles(node: FileTreeNode): number {
   if (node.kind === "file") return 1;
   return node.children.reduce((acc, c) => acc + countFiles(c), 0);
 }
 
-function buildGraph(
+// A directory auto-expands when its content is small enough that showing it
+// outright keeps the first paint bounded on huge repos (PRD-G05): the root and
+// every top-level directory always render, but a dir only reveals ITS children
+// by default if it holds ≤12 entries and ≤200 files. Everything else stays
+// collapsed until clicked.
+const AUTO_EXPAND_MAX_CHILDREN = 12;
+const AUTO_EXPAND_MAX_FILES = 200;
+
+export function buildGraph(
   root: FileTreeNode,
   expanded: Set<string>
 ): { nodes: GraphNode[]; links: GraphLink[] } {
@@ -67,11 +75,14 @@ function buildGraph(
     } as GraphNode & { r: number });
     if (parent) links.push({ source: parent, target: node.path || "/" });
 
-    // Expand rule: depth-0/1 dirs are open by default so the first paint shows
-    // real structure; deeper dirs stay collapsed until clicked (PRD-G05).
-    const defaultOpen = depth <= 1;
-    if (node.kind === "dir" && (defaultOpen || expanded.has(node.path || "/"))) {
-      for (const child of node.children) walk(child, depth + 1, node.path || "/");
+    if (node.kind === "dir") {
+      const small =
+        node.children.length <= AUTO_EXPAND_MAX_CHILDREN &&
+        countFiles(node) <= AUTO_EXPAND_MAX_FILES;
+      const defaultOpen = depth === 0 || small;
+      if (defaultOpen || expanded.has(node.path || "/")) {
+        for (const child of node.children) walk(child, depth + 1, node.path || "/");
+      }
     }
   };
   walk(root, 0, null);
