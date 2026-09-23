@@ -16,6 +16,13 @@ for (const p of [rootEnv, workspaceRoot]) {
 const ANALYSIS_URL = process.env.ANALYSIS_SERVICE_URL ?? "http://localhost:8100";
 const RETRIEVAL_URL = process.env.RETRIEVAL_SERVICE_URL ?? "http://localhost:8200";
 const GENERATION_URL = process.env.GENERATION_SERVICE_URL ?? "http://localhost:8300";
+
+// Sibling containers race at deploy time: the python services start in
+// parallel with the worker, so they're allowed to be briefly unavailable.
+// The DB is the exception — no retry can fix a missing database.
+const PIPELINE_RETRY_MAX = Number(process.env.PIPELINE_BOOT_RETRIES ?? "12");
+const PIPELINE_RETRY_DELAY_MS = 10_000;
+
 const HEARTBEAT_KEY = "worker:heartbeat";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TTL_S = 60;
@@ -45,25 +52,52 @@ export async function bootReadinessCheck(): Promise<boolean> {
   }
 
   // DB: lazy-connect via a trivial query (Prisma connects on first use).
+  // Fatal if down — retrying can't fix a missing database.
   const { PrismaClient } = await import("@vibe-coder/database");
   const prisma = new PrismaClient();
   await probe("database", async () => {
     await prisma.$queryRaw`SELECT 1`;
   });
+  const dbDown = deps.some((d) => d.name === "database" && !d.ok);
+  if (dbDown) {
+    console.error(
+      "[worker] refusing to start: database unreachable. " +
+        "Check DATABASE_URL and that the DB is running."
+    );
+    await prisma.$disconnect().catch(() => {});
+    return false;
+  }
 
-  await probe("analysis", () => pingService(ANALYSIS_URL));
-  await probe("retrieval", () => pingService(RETRIEVAL_URL));
-  await probe("generation", () => pingService(GENERATION_URL));
+  // Pipeline deps: retry for up to ~2 minutes (12 x 10s) to absorb the
+  // deploy-time startup race with sibling containers, then degrade:
+  // start anyway and let per-job readiness refusals keep work honest.
+  const pipelineProbes: [string, () => Promise<void>][] = [
+    ["analysis", () => pingService(ANALYSIS_URL)],
+    ["retrieval", () => pingService(RETRIEVAL_URL)],
+    ["generation", () => pingService(GENERATION_URL)],
+  ];
+  let pipelineDown: string[] = [];
+  for (let attempt = 1; attempt <= PIPELINE_RETRY_MAX; attempt++) {
+    deps.length = 0;
+    for (const [name, fn] of pipelineProbes) {
+      await probe(name, fn);
+    }
+    pipelineDown = deps.filter((d) => !d.ok).map((d) => d.name);
+    if (pipelineDown.length === 0) break;
+    console.warn(
+      `[worker] pipeline deps offline (${pipelineDown.join(", ")}) — ` +
+        `retry ${attempt}/${PIPELINE_RETRY_MAX} in ${PIPELINE_RETRY_DELAY_MS / 1000}s`
+    );
+    await new Promise((r) => setTimeout(r, PIPELINE_RETRY_DELAY_MS));
+  }
 
   await prisma.$disconnect().catch(() => {});
 
-  if (deps.some((d) => !d.ok)) {
-    const down = deps.filter((d) => !d.ok).map((d) => d.name).join(", ");
+  if (pipelineDown.length > 0) {
     console.error(
-      `[worker] refusing to start: offline dependency(ies): ${down}. ` +
-        `Start the missing services and relaunch (see scripts/dev-up.sh).`
+      `[worker] pipeline deps still offline after retries: ${pipelineDown.join(", ")}. ` +
+        `Starting anyway — analyses will be refused with a 503 until they recover.`
     );
-    return false;
   }
   return true;
 }

@@ -45,6 +45,9 @@ COPY --from=builder /app/packages/database/generated ./packages/database/generat
 COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
 # Package manifest is required for require("@vibe-coder/database") to resolve.
 COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
+# migrations.js backs the @vibe-coder/database/migrations subpath export;
+# the compiled api/worker dist bundles require it at boot (schema guard).
+COPY --from=builder /app/packages/database/migrations.js ./packages/database/migrations.js
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api/
