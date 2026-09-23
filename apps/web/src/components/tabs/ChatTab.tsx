@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { useAuthedFetch } from "@/lib/api";
+import { ChevronDown, Loader2, Copy } from "lucide-react";
 
 interface Citation {
   filePath: string;
@@ -48,7 +49,6 @@ export function ChatTab({
       .post<{ id: string }>(`/repos/${repoId}/chat/sessions`, {})
       .then((s) => setSessionId(s.id))
       .catch(() => {
-        // Fallback local session ID if API mock
         setSessionId(`${repoId}:${Date.now()}`);
       });
   }, [api, repoId]);
@@ -93,7 +93,6 @@ export function ChatTab({
     const text = (textToSend ?? input).trim();
     if (!text || streaming) return;
     if (!socket || !sessionId) {
-      // Offline fallback
       setMessages((prev) => [
         ...prev,
         { id: `user-${Date.now()}`, role: "user", content: text, citations: [], createdAt: new Date().toISOString() },
@@ -134,198 +133,209 @@ export function ChatTab({
   };
 
   return (
-    <div style={S.container}>
-      {/* Header bar */}
-      <div style={S.headerBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={S.activeIndicator} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
-            Codebase Knowledge Assistant
-          </span>
-          <span className="badge badge-teal" style={{ fontSize: 11 }}>
-            RAG Grounded
-          </span>
-          {isDemoMode && (
-            <span className="badge badge-yellow" style={{ fontSize: 11, background: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)" }}>
-              DEMO
-            </span>
-          )}
-        </div>
-        {messages.length > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={clearChat} style={{ fontSize: 12, padding: "4px 10px" }}>
-            Clear Chat
-          </button>
-        )}
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <p className="section-label">04 // CHAT</p>
+        <h2 className="section-title">Codebase Knowledge Assistant</h2>
       </div>
 
-      {/* Message history */}
-      <div style={S.messageList}>
-        {messages.length === 0 ? (
-          <div style={S.emptyState}>
-            <div style={S.emptyIcon}>💬</div>
-            <h4 style={S.emptyTitle}>Ask Anything About the Repository</h4>
-            <p style={S.emptyDesc}>
-              Ask architectural questions, dive into specific implementations, or test your reasoning.
-              Answers include direct source-code citations.
-            </p>
-
-            <div style={S.suggestionGrid}>
-              {SUGGESTED_PROMPTS.map((prompt, i) => (
-                <button
-                  key={i}
-                  style={S.suggestionChip}
-                  onClick={() => send(prompt)}
-                  type="button"
-                >
-                  <span style={{ color: "var(--brand-400)", marginRight: 6 }}>✦</span>
-                  {prompt}
-                </button>
-              ))}
-            </div>
+      <div className="panel flex flex-col h-[640px] overflow-hidden">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-lab-border bg-lab-bg-raise/50">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-lab-blue animate-pulse" />
+            <span className="text-sm font-semibold text-lab-textMuted">Codebase Knowledge Assistant</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-lab-blueDim text-lab-blue border border-lab-blue/30">
+              <span className="w-1 h-1 rounded-full bg-lab-blue shrink-0" />
+              RAG Grounded
+            </span>
+            {isDemoMode && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                DEMO
+              </span>
+            )}
           </div>
-        ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                ...S.messageRow,
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-              }}
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-lab-card border border-lab-border text-lab-textMuted hover:bg-lab-blue/5 hover:text-white hover:border-lab-blue/40 transition-colors"
             >
-              {m.role === "assistant" && (
-                <div style={S.avatarAssistant}>⚡</div>
-              )}
+              Clear Chat
+            </button>
+          )}
+        </div>
 
+        {/* Message history */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center h-full max-w-md mx-auto px-4">
+              <div className="w-16 h-16 rounded-xl bg-lab-blueDim border border-lab-blue/30 flex items-center justify-center mb-4">
+                <span className="text-3xl">💬</span>
+              </div>
+              <h4 className="text-lg font-semibold text-white mb-2">Ask Anything About the Repository</h4>
+              <p className="text-lab-textMuted text-sm leading-relaxed mb-6">
+                Ask architectural questions, dive into specific implementations, or test your reasoning.
+                Answers include direct source-code citations.
+              </p>
+
+              <div className="w-full space-y-2">
+                {SUGGESTED_PROMPTS.map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => send(prompt)}
+                    className="w-full text-left px-4 py-3 rounded-lg bg-lab-card border border-lab-border text-white text-sm hover:bg-lab-blue/5 hover:border-lab-blue/40 transition-colors flex items-center gap-3"
+                  >
+                    <span className="text-lab-blue">✦</span>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((m) => (
               <div
-                style={{
-                  ...S.bubble,
-                  ...(m.role === "user" ? S.userBubble : S.assistantBubble),
-                }}
+                key={m.id}
+                className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
               >
-                {/* Content */}
-                <div style={S.messageContent}>
-                  {m.content ? (
-                    <RenderMessageContent content={m.content} />
-                  ) : streaming ? (
-                    <span style={S.streamingDots}>
-                      Thinking<span>.</span><span>.</span><span>.</span>
-                    </span>
-                  ) : (
-                    <span style={{ color: "var(--text-muted)" }}>No response</span>
+                {m.role === "assistant" && (
+                  <div className="w-8 h-8 min-w-8 rounded-lg flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-teal-600 to-cyan-400 shadow-[0_0_12px_rgba(13,148,136,0.4)]">
+                    ⚡
+                  </div>
+                )}
+
+                <div
+                  className={`flex-1 max-w-[85%] rounded-xl px-4 py-3 ${
+                    m.role === "user"
+                      ? "bg-gradient-to-br from-teal-600/25 to-cyan-400/15 border border-cyan-400/30"
+                      : "bg-lab-card border border-lab-border"
+                  }`}
+                >
+                  {/* Content */}
+                  <div className="text-sm leading-relaxed">
+                    {m.content ? (
+                      <RenderMessageContent content={m.content} />
+                    ) : streaming ? (
+                      <span className="text-lab-blue italic">Thinking<span className="animate-pulse">…</span></span>
+                    ) : (
+                      <span className="text-lab-textMuted">No response</span>
+                    )}
+                  </div>
+
+                  {/* Citations */}
+                  {m.citations && m.citations.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-lab-border">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-mono uppercase tracking-wider text-lab-blue">
+                          Verified Citations ({m.citations.length})
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {m.citations.map((c, i) => {
+                          const citeKey = `${c.filePath}:${c.startLine}-${c.endLine}`;
+                          return (
+                            <div
+                              key={i}
+                              className="inline-flex items-center gap-2 px-2 py-1.5 rounded bg-lab-bg border border-lab-border text-xs text-white cursor-pointer hover:bg-lab-blue/10 hover:border-lab-blue/40 transition-colors"
+                              onClick={() => copyCitation(citeKey)}
+                              title="Click to copy file reference"
+                            >
+                              <span className="text-lab-blue">📄</span>
+                              <span className="font-medium">{c.filePath}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-lab-blueDim text-lab-blue">
+                                L{c.startLine}–{c.endLine}
+                              </span>
+                              {copiedCitation === citeKey && (
+                                <span className="text-green-400 text-[10px] font-semibold">Copied!</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Citations */}
-                {m.citations && m.citations.length > 0 && (
-                  <div style={S.citationsContainer}>
-                    <div style={S.citationHeader}>
-                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--brand-400)" }}>
-                        Verified Citations ({m.citations.length})
-                      </span>
-                    </div>
-                    <div style={S.citationsList}>
-                      {m.citations.map((c, i) => {
-                        const citeKey = `${c.filePath}:${c.startLine}-${c.endLine}`;
-                        return (
-                          <div
-                            key={i}
-                            style={S.citationBadge}
-                            onClick={() => copyCitation(citeKey)}
-                            title="Click to copy file reference"
-                          >
-                            <span style={{ color: "var(--brand-400)", fontSize: 12 }}>📄</span>
-                            <span style={{ fontWeight: 600 }}>{c.filePath}</span>
-                            <span style={S.lineTag}>L{c.startLine}–{c.endLine}</span>
-                            {copiedCitation === citeKey && (
-                              <span style={S.copiedNotice}>Copied!</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                {m.role === "user" && (
+                  <div className="w-8 h-8 min-w-8 rounded-lg flex items-center justify-center text-base shrink-0 bg-lab-card border border-lab-border">
+                    👤
                   </div>
                 )}
               </div>
+            ))
+          )}
+          <div ref={bottomRef} />
+        </div>
 
-              {m.role === "user" && (
-                <div style={S.avatarUser}>👤</div>
+        {/* Input container */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+          className="p-4 border-t border-lab-border bg-lab-bg-raise/50"
+        >
+          <div className="flex gap-2 items-center bg-lab-card border border-lab-border rounded-lg px-3 py-1.5">
+            <input
+              className="flex-1 bg-transparent border-none text-white text-sm outline-none placeholder-lab-dim"
+              value={input}
+              placeholder="Ask about design trade-offs, concurrency, failure modes, or modules…"
+              onChange={(e) => setInput(e.target.value)}
+              disabled={streaming}
+            />
+            <button
+              type="submit"
+              className="px-4 py-1.5 text-sm font-medium rounded-md bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={streaming || !input.trim()}
+            >
+              {streaming ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending…</span>
+                </>
+              ) : (
+                <>
+                  <span>Send</span>
+                  <span className="text-xs">↵</span>
+                </>
               )}
-            </div>
-          ))
-        )}
-        <div ref={bottomRef} />
+            </button>
+          </div>
+          <div className="flex justify-between text-[10px] text-lab-dim mt-2 px-1">
+            <span>Grounds answers in parsed ASTs & retrieval indexes</span>
+            <span>Shift + Enter for multiline</span>
+          </div>
+        </form>
       </div>
-
-      {/* Input container */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-        style={S.inputArea}
-      >
-        <div style={S.inputWrapper}>
-          <input
-            style={S.input}
-            value={input}
-            placeholder="Ask about design trade-offs, concurrency, failure modes, or modules…"
-            onChange={(e) => setInput(e.target.value)}
-            disabled={streaming}
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={S.sendButton}
-            disabled={streaming || !input.trim()}
-          >
-            {streaming ? (
-              <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-            ) : (
-              <>
-                <span>Send</span>
-                <span style={{ fontSize: 12 }}>↵</span>
-              </>
-            )}
-          </button>
-        </div>
-        <div style={S.inputSubtext}>
-          <span>Grounds answers in parsed ASTs & retrieval indexes</span>
-          <span>Shift + Enter for multiline</span>
-        </div>
-      </form>
     </div>
   );
 }
 
 function RenderMessageContent({ content }: { content: string }) {
-  // Strip inline [cite:...] markers from raw text display since citations are shown cleanly below
   const cleanContent = content.replace(/\[cite:[^\]]+\]/g, "").trim();
-
-  // Simple paragraph & markdown code segmenting
   const paragraphs = cleanContent.split("\n\n");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="space-y-2">
       {paragraphs.map((para, idx) => {
         if (para.startsWith("```")) {
           const lines = para.split("\n");
           const lang = lines[0].replace("```", "");
           const code = lines.slice(1, -1).join("\n");
           return (
-            <div key={idx} style={S.codeBlock}>
-              {lang && <div style={S.codeLang}>{lang}</div>}
-              <pre style={S.codePre}>{code}</pre>
+            <div key={idx} className="rounded-lg bg-lab-bg border border-lab-border overflow-x-auto">
+              {lang && <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-lab-dim bg-lab-card border-b border-lab-border">{lang}</div>}
+              <pre className="p-3 text-xs font-mono text-slate-200"><code>{code}</code></pre>
             </div>
           );
         }
 
-        // Check for bullet lists
         if (para.includes("\n- ") || para.startsWith("- ")) {
           const items = para.split("\n").filter((l) => l.trim().startsWith("- ") || l.trim().startsWith("* "));
           return (
-            <ul key={idx} style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+            <ul key={idx} className="space-y-1 pl-5">
               {items.map((item, itemIdx) => (
-                <li key={itemIdx} style={{ color: "var(--text-primary)", fontSize: 14 }}>
+                <li key={itemIdx} className="text-sm text-white leading-relaxed">
                   <InlineFormatting text={item.replace(/^[-*]\s+/, "")} />
                 </li>
               ))}
@@ -334,7 +344,7 @@ function RenderMessageContent({ content }: { content: string }) {
         }
 
         return (
-          <p key={idx} style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-primary)", margin: 0 }}>
+          <p key={idx} className="text-sm leading-relaxed text-white m-0">
             <InlineFormatting text={para} />
           </p>
         );
@@ -344,21 +354,20 @@ function RenderMessageContent({ content }: { content: string }) {
 }
 
 function InlineFormatting({ text }: { text: string }) {
-  // Bold formatting
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
-            <strong key={i} style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+            <strong key={i} className="font-semibold text-white">
               {part.slice(2, -2)}
             </strong>
           );
         }
         if (part.startsWith("`") && part.endsWith("`")) {
           return (
-            <code key={i} style={S.inlineCode}>
+            <code key={i} className="px-1.5 py-0.5 rounded text-xs font-mono bg-lab-bg border border-lab-border text-cyan-300">
               {part.slice(1, -1)}
             </code>
           );
@@ -368,253 +377,3 @@ function InlineFormatting({ text }: { text: string }) {
     </>
   );
 }
-
-const S = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    height: "640px",
-    background: "var(--surface)",
-    borderRadius: "var(--r-lg)",
-    border: "1px solid var(--border)",
-    overflow: "hidden",
-    boxShadow: "var(--shadow-md)",
-  },
-  headerBar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "12px 20px",
-    borderBottom: "1px solid var(--border)",
-    background: "rgba(255,255,255,0.02)",
-  },
-  activeIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    background: "var(--brand-400)",
-    boxShadow: "0 0 10px var(--brand-400)",
-  },
-  messageList: {
-    flex: 1,
-    overflowY: "auto" as const,
-    padding: "20px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 16,
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center" as const,
-    margin: "auto",
-    maxWidth: 540,
-    padding: "40px 20px",
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 16,
-    background: "rgba(13,148,136,0.12)",
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "1px solid rgba(13,148,136,0.3)",
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--text-primary)",
-    marginBottom: 8,
-  },
-  emptyDesc: {
-    fontSize: 14,
-    color: "var(--text-secondary)",
-    lineHeight: 1.55,
-    marginBottom: 24,
-  },
-  suggestionGrid: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-    width: "100%",
-  },
-  suggestionChip: {
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-md)",
-    padding: "10px 14px",
-    color: "var(--text-primary)",
-    fontSize: 13,
-    textAlign: "left" as const,
-    cursor: "pointer",
-    transition: "all 0.18s ease",
-    display: "flex",
-    alignItems: "center",
-  },
-  messageRow: {
-    display: "flex",
-    gap: 12,
-    alignItems: "flex-start",
-    maxWidth: "100%",
-  },
-  avatarAssistant: {
-    width: 32,
-    height: 32,
-    minWidth: 32,
-    borderRadius: "var(--r-md)",
-    background: "linear-gradient(135deg, #0d9488, #2dd4bf)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 15,
-    boxShadow: "0 0 12px rgba(13,148,136,0.4)",
-  },
-  avatarUser: {
-    width: 32,
-    height: 32,
-    minWidth: 32,
-    borderRadius: "var(--r-md)",
-    background: "var(--surface-3)",
-    border: "1px solid var(--border)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 14,
-  },
-  bubble: {
-    borderRadius: "var(--r-lg)",
-    padding: "14px 18px",
-    maxWidth: "85%",
-    boxShadow: "var(--shadow-sm)",
-  },
-  userBubble: {
-    background: "linear-gradient(135deg, rgba(13,148,136,0.25), rgba(45,212,191,0.15))",
-    border: "1px solid rgba(45,212,191,0.3)",
-    color: "var(--text-primary)",
-  },
-  assistantBubble: {
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    color: "var(--text-primary)",
-  },
-  messageContent: {
-    fontSize: 14,
-    lineHeight: 1.6,
-  },
-  streamingDots: {
-    color: "var(--brand-400)",
-    fontStyle: "italic",
-  },
-  citationsContainer: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTop: "1px solid var(--border)",
-  },
-  citationHeader: {
-    marginBottom: 8,
-  },
-  citationsList: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  citationBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "var(--r-sm)",
-    padding: "4px 8px",
-    fontSize: 12,
-    color: "var(--text-primary)",
-    cursor: "pointer",
-    transition: "background 0.15s ease",
-  },
-  lineTag: {
-    background: "rgba(13,148,136,0.2)",
-    color: "var(--brand-400)",
-    borderRadius: 3,
-    padding: "1px 5px",
-    fontSize: 11,
-    fontFamily: "monospace",
-  },
-  copiedNotice: {
-    fontSize: 10,
-    color: "var(--green)",
-    fontWeight: 700,
-  },
-  codeBlock: {
-    background: "rgba(0,0,0,0.4)",
-    borderRadius: "var(--r-sm)",
-    padding: "10px 14px",
-    margin: "6px 0",
-    border: "1px solid var(--border)",
-    overflowX: "auto" as const,
-  },
-  codeLang: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--text-muted)",
-    textTransform: "uppercase" as const,
-    marginBottom: 4,
-  },
-  codePre: {
-    fontFamily: "monospace",
-    fontSize: 13,
-    color: "#e2e8f0",
-    margin: 0,
-    whiteSpace: "pre-wrap" as const,
-  },
-  inlineCode: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    background: "rgba(255,255,255,0.08)",
-    padding: "2px 5px",
-    borderRadius: 4,
-    color: "var(--brand-200)",
-  },
-  inputArea: {
-    padding: "14px 20px",
-    borderTop: "1px solid var(--border)",
-    background: "var(--surface)",
-  },
-  inputWrapper: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    background: "var(--surface-2)",
-    borderRadius: "var(--r-md)",
-    padding: "6px 8px 6px 14px",
-    border: "1px solid var(--border)",
-  },
-  input: {
-    flex: 1,
-    background: "transparent",
-    border: "none",
-    color: "var(--text-primary)",
-    fontSize: 14,
-    outline: "none",
-  },
-  sendButton: {
-    padding: "8px 16px",
-    fontSize: 13,
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: "var(--r-md)",
-  },
-  inputSubtext: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 11,
-    color: "var(--text-muted)",
-    marginTop: 8,
-    padding: "0 4px",
-  },
-} as const;

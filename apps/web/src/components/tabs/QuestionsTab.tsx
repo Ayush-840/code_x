@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthedFetch } from "@/lib/api";
+import { ChevronDown } from "lucide-react";
 
 type Category = "architecture" | "security" | "performance" | "testing" | "data" | "api" | "devops" | "all";
 type Difficulty = "junior" | "mid" | "senior" | "all";
@@ -28,11 +29,11 @@ const CATEGORY_ICON: Record<string, string> = {
   data: "🗄️", api: "🔌", devops: "🚀", default: "❓",
 };
 const TYPE_COLOR: Record<string, string> = {
-  exploratory: "badge-blue", adversarial: "badge-red",
-  debugging: "badge-amber", "trade-off": "badge-teal",
+  exploratory: "bg-blue-500/20 text-blue-400 border-blue-500/30", adversarial: "bg-red-500/20 text-red-400 border-red-500/30",
+  debugging: "bg-amber-500/20 text-amber-400 border-amber-500/30", "trade-off": "bg-teal-500/20 text-teal-400 border-teal-500/30",
 };
 const DIFF_COLOR: Record<string, string> = {
-  junior: "badge-green", mid: "badge-amber", senior: "badge-red",
+  junior: "bg-green-500/20 text-green-400 border-green-500/30", mid: "bg-amber-500/20 text-amber-400 border-amber-500/30", senior: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
 export function QuestionsTab({ repoId }: { repoId: string }) {
@@ -70,30 +71,33 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
   });
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <p className="section-label">03 // QUESTIONS</p>
+        <h2 className="section-title">Interview Question Bank</h2>
+      </div>
+
       {/* Filters */}
-      <div style={S.filters}>
+      <div className="panel p-4 flex flex-wrap gap-3">
         <input
-          className="input"
-          placeholder="🔍  Search questions…"
+          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white placeholder-lab-dim text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
+          placeholder="Search questions…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 200, padding: "8px 12px" }}
         />
         <select
-          className="input"
+          className="px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value as Category)}
-          style={{ width: 160 }}
         >
           <option value="all">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select
-          className="input"
+          className="px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
           value={filterDiff}
           onChange={(e) => setFilterDiff(e.target.value as Difficulty)}
-          style={{ width: 140 }}
         >
           <option value="all">All levels</option>
           <option value="junior">Junior</option>
@@ -102,50 +106,63 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
         </select>
       </div>
 
-      <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+      <p className="text-sm text-lab-textMuted">
         Showing {filtered.length} of {questions.length} questions
-      </div>
+      </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="panel space-y-3">
         {filtered.map((q, i) => {
           const key = q.id ?? `${q.category}-${i}`;
           const isOpen = expanded === key;
           const catIcon = CATEGORY_ICON[q.category] ?? CATEGORY_ICON.default;
           return (
-            <div key={key} className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <button style={S.qBtn} onClick={() => setExpanded(isOpen ? null : key)}>
-                <span style={{ fontSize: 20 }}>{catIcon}</span>
-                <div style={{ flex: 1, textAlign: "left" }}>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4 }}>
-                    {q.question}
-                  </p>
+            <div key={key} className="bg-lab-card border border-lab-border rounded-lg overflow-hidden">
+              <button
+                className="w-full flex items-start gap-3 px-4 py-4 text-left hover:bg-lab-blue/5 transition-colors"
+                onClick={() => setExpanded(isOpen ? null : key)}
+              >
+                <span className="text-2xl shrink-0 mt-0.5">{catIcon}</span>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-white text-base leading-snug">{q.question}</p>
                 </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                  {q.type && <span className={`badge ${TYPE_COLOR[q.type] ?? "badge-gray"}`}>{q.type}</span>}
-                  <span className={`badge ${DIFF_COLOR[q.difficulty] ?? "badge-gray"}`}>{q.difficulty}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 16, transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }}>⌄</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {q.type && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${TYPE_COLOR[q.type] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
+                      {q.type}
+                    </span>
+                  )}
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${DIFF_COLOR[q.difficulty] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
+                    {q.difficulty}
+                  </span>
+                  <ChevronDown
+                    className={`w-5 h-5 text-lab-textMuted transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`}
+                  />
                 </div>
               </button>
 
               {isOpen && q.modelAnswer && (
-                <div style={S.answer}>
-                  <div style={S.answerLabel}>Model answer</div>
-                  <p style={S.answerText}>{q.modelAnswer}</p>
+                <div className="border-t border-lab-border px-4 pb-4 pt-4 space-y-4">
+                  <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Model answer</p>
+                  <p className="text-sm text-lab-textMuted leading-relaxed whitespace-pre-wrap">{q.modelAnswer}</p>
 
                   {q.citations && q.citations.length > 0 && (
-                    <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-[10px] text-lab-dim uppercase tracking-wider self-center">Grounded in:</span>
                       {q.citations.map((c, ci) => (
-                        <span key={ci} className="citation">
-                          📍 {c.filePath}:{c.startLine}-{c.endLine}
+                        <span key={ci} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-lab-blueDim text-lab-blue border border-lab-blue/30">
+                          <span className="w-1 h-1 rounded-full bg-lab-blue shrink-0" />
+                          {c.filePath}:{c.startLine}–{c.endLine}
                         </span>
                       ))}
                     </div>
                   )}
 
                   {q.interviewerTip && (
-                    <div style={S.tip}>
-                      <span style={{ fontWeight: 600, color: "#fbbf24" }}>💡 Interviewer tip: </span>
-                      {q.interviewerTip}
+                    <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-sm text-amber-300 leading-relaxed">
+                        <span className="font-semibold">💡 Interviewer tip: </span>
+                        {q.interviewerTip}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -160,54 +177,23 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
 
 function LoadingState() {
   return (
-    <div style={{ textAlign: "center", padding: "60px 24px" }}>
-      <div className="spinner" style={{ margin: "0 auto 16px" }} />
-      <p style={{ color: "var(--text-muted)" }}>Loading question bank…</p>
+    <div className="panel flex items-center justify-center h-64">
+      <div className="flex flex-col items-center gap-3 text-lab-textMuted">
+        <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
+        <p>Loading question bank…</p>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ error }: { error?: string }) {
   return (
-    <div className="empty-state">
-      <div className="empty-icon">❓</div>
-      <h3>Question bank not ready</h3>
-      <p>{error ? `Error: ${error}` : "Run analysis to auto-generate interview questions."}</p>
+    <div className="panel text-center py-12">
+      <div className="text-4xl mb-2">❓</div>
+      <h3 className="text-lab-text font-semibold mb-1">Question bank not ready</h3>
+      <p className="text-lab-textMuted text-sm">
+        {error ? `Error: ${error}` : "Run analysis to auto-generate interview questions."}
+      </p>
     </div>
   );
 }
-
-const S = {
-  filters: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" as const },
-  qBtn: {
-    width: "100%",
-    background: "none",
-    border: "none",
-    padding: "14px 18px",
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 12,
-    cursor: "pointer",
-    textAlign: "left" as const,
-  },
-  answer: {
-    padding: "14px 18px 18px",
-    borderTop: "1px solid var(--border)",
-    background: "var(--surface-2)",
-  },
-  answerLabel: {
-    fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
-    textTransform: "uppercase" as const,
-    color: "var(--text-muted)", marginBottom: 8,
-  },
-  answerText: { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.7 },
-  tip: {
-    marginTop: 12,
-    background: "rgba(245,158,11,.08)",
-    border: "1px solid rgba(245,158,11,.2)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    fontSize: 13,
-    color: "#fde68a",
-  },
-} as const;

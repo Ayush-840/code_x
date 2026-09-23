@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthedFetch } from "@/lib/api";
+import { ChevronDown } from "lucide-react";
 
 interface Module {
   id?: string;
@@ -27,7 +28,6 @@ export function ModulesTab({ repoId }: { repoId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    // Try artifact first (richer data), fall back to CodeModule list
     api.get<{ content: { modules?: Module[] } }>(`/repos/${repoId}/modules`)
       .then((res) => {
         const content = (res as unknown as { content?: { modules?: Module[] } }).content;
@@ -45,164 +45,145 @@ export function ModulesTab({ repoId }: { repoId: string }) {
   const sorted = [...modules].sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ marginBottom: 8, fontSize: 14, color: "var(--text-muted)" }}>
-        {modules.length} module{modules.length !== 1 ? "s" : ""} detected · reading order
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <p className="section-label">02 // MODULES</p>
+        <h2 className="section-title">Module Explanations</h2>
       </div>
-      {sorted.map((mod, i) => {
-        const key = mod.id ?? mod.name;
-        const isOpen = expanded === key;
-        const desc = mod.purpose ?? mod.purposeSummary;
-        return (
-          <div key={key} className="card" style={{ padding: 0, overflow: "hidden" }}>
-            {/* Header row */}
-            <button
-              onClick={() => setExpanded(isOpen ? null : key)}
-              style={S.rowBtn}
-            >
-              <div style={{ flex: 1, textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, minWidth: 20 }}>
-                    #{i + 1}
-                  </span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
-                    {mod.name}
-                  </span>
-                  {mod.path && <code style={S.pathChip}>{mod.path}</code>}
-                </div>
-                {desc && !isOpen && (
-                  <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.4 }}>
-                    {desc.slice(0, 120)}{desc.length > 120 ? "…" : ""}
-                  </p>
-                )}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                {mod.fileCount !== undefined && (
-                  <span style={S.meta}>{mod.fileCount} files</span>
-                )}
-                {mod.lineCount !== undefined && (
-                  <span style={S.meta}>{mod.lineCount.toLocaleString()} lines</span>
-                )}
-                {mod.complexityScore !== null && mod.complexityScore !== undefined && (
-                  <span className={`badge ${mod.complexityScore > 70 ? "badge-red" : mod.complexityScore > 40 ? "badge-amber" : "badge-green"}`}>
-                    Complexity {Math.round(mod.complexityScore)}
-                  </span>
-                )}
-                <span style={{ color: "var(--text-muted)", fontSize: 18, transition: "transform .2s", transform: isOpen ? "rotate(180deg)" : "none" }}>
-                  ⌄
-                </span>
-              </div>
-            </button>
 
-            {/* Expanded body */}
-            {isOpen && (
-              <div style={S.body}>
-                {desc && (
-                  <div style={S.section}>
-                    <div style={S.sectionLabel}>Purpose</div>
-                    <p style={S.bodyText}>{desc}</p>
+      <div className="panel space-y-3">
+        <p className="text-sm text-lab-textMuted">
+          {modules.length} module{modules.length !== 1 ? "s" : ""} detected · reading order
+        </p>
+        {sorted.map((mod, i) => {
+          const key = mod.id ?? mod.name;
+          const isOpen = expanded === key;
+          const desc = mod.purpose ?? mod.purposeSummary;
+          return (
+            <div key={key} className="bg-lab-card border border-lab-border rounded-lg overflow-hidden">
+              {/* Header row */}
+              <button
+                onClick={() => setExpanded(isOpen ? null : key)}
+                className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-lab-blue/5 transition-colors"
+              >
+                <div className="flex-1 text-left">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-lab-textMuted font-bold min-w-[24px]">#{i + 1}</span>
+                    <span className="font-semibold text-white text-base">{mod.name}</span>
+                    {mod.path && (
+                      <code className="px-2 py-0.5 rounded text-xs font-mono bg-lab-bg-raise border border-lab-border text-lab-textMuted">
+                        {mod.path}
+                      </code>
+                    )}
                   </div>
-                )}
-                {mod.abstractions && mod.abstractions.length > 0 && (
-                  <div style={S.section}>
-                    <div style={S.sectionLabel}>Key abstractions</div>
-                    <div style={S.pillRow}>
-                      {mod.abstractions.map((a) => <code key={a} style={S.codeChip}>{a}</code>)}
+                  {desc && !isOpen && (
+                    <p className="text-sm text-lab-textMuted mt-1.5 line-clamp-1">{desc}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {mod.fileCount !== undefined && (
+                    <span className="text-sm text-lab-textMuted">{mod.fileCount} files</span>
+                  )}
+                  {mod.lineCount !== undefined && (
+                    <span className="text-sm text-lab-textMuted">{mod.lineCount.toLocaleString()} lines</span>
+                  )}
+                  {mod.complexityScore !== null && mod.complexityScore !== undefined && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-mono ${
+                      mod.complexityScore > 70
+                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                        : mod.complexityScore > 40
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        : "bg-green-500/20 text-green-400 border border-green-500/30"
+                    }`}>
+                      <span className="w-1 h-1 rounded-full bg-current shrink-0" />
+                      Complexity {Math.round(mod.complexityScore)}
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`w-5 h-5 text-lab-textMuted transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Expanded body */}
+              {isOpen && (
+                <div className="border-t border-lab-border px-4 pb-4 space-y-5 pt-4">
+                  {desc && (
+                    <div>
+                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Purpose</p>
+                      <p className="text-sm text-lab-textMuted leading-relaxed">{desc}</p>
                     </div>
-                  </div>
-                )}
-                {mod.failureModes && mod.failureModes.length > 0 && (
-                  <div style={S.section}>
-                    <div style={S.sectionLabel}>Common failure modes</div>
-                    <ul style={S.list}>
-                      {mod.failureModes.map((f, i) => <li key={i} style={S.listItem}>{f}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {mod.talkingPoints && mod.talkingPoints.length > 0 && (
-                  <div style={S.section}>
-                    <div style={S.sectionLabel}>💡 Interview talking points</div>
-                    <ul style={S.list}>
-                      {mod.talkingPoints.map((tp, i) => <li key={i} style={{ ...S.listItem, color: "#2dd4bf" }}>{tp}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                  )}
+                  {mod.abstractions && mod.abstractions.length > 0 && (
+                    <div>
+                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Key abstractions</p>
+                      <div className="flex flex-wrap gap-2">
+                        {mod.abstractions.map((a) => (
+                          <code key={a} className="px-2 py-1 rounded text-xs font-mono bg-lab-card border border-lab-border text-lab-text">
+                            {a}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {mod.failureModes && mod.failureModes.length > 0 && (
+                    <div>
+                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Common failure modes</p>
+                      <ul className="space-y-2">
+                        {mod.failureModes.map((f, i) => (
+                          <li key={i} className="text-sm text-lab-textMuted leading-relaxed flex gap-2">
+                            <span className="text-red-400 shrink-0">•</span>
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {mod.talkingPoints && mod.talkingPoints.length > 0 && (
+                    <div>
+                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">💡 Interview talking points</p>
+                      <ul className="space-y-2">
+                        {mod.talkingPoints.map((tp, i) => (
+                          <li key={i} className="text-sm text-lab-blue leading-relaxed flex gap-2">
+                            <span className="text-lab-blue shrink-0">•</span>
+                            <span>{tp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function LoadingState() {
   return (
-    <div style={{ textAlign: "center", padding: "60px 24px" }}>
-      <div className="spinner" style={{ margin: "0 auto 16px" }} />
-      <p style={{ color: "var(--text-muted)" }}>Loading modules…</p>
+    <div className="panel flex items-center justify-center h-64">
+      <div className="flex flex-col items-center gap-3 text-lab-textMuted">
+        <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
+        <p>Loading modules…</p>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ error }: { error?: string }) {
   return (
-    <div className="empty-state">
-      <div className="empty-icon">🧩</div>
-      <h3>No modules yet</h3>
-      <p>{error ? `Error: ${error}` : "Run the analysis pipeline to generate module explanations."}</p>
+    <div className="panel text-center py-12">
+      <div className="text-4xl mb-2">🧩</div>
+      <h3 className="text-lab-text font-semibold mb-1">No modules yet</h3>
+      <p className="text-lab-textMuted text-sm">
+        {error ? `Error: ${error}` : "Run the analysis pipeline to generate module explanations."}
+      </p>
     </div>
   );
 }
-
-const S = {
-  rowBtn: {
-    width: "100%",
-    background: "none",
-    border: "none",
-    padding: "16px 20px",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    cursor: "pointer",
-  },
-  pathChip: {
-    background: "var(--surface-3)",
-    borderRadius: 4,
-    padding: "1px 8px",
-    fontSize: 12,
-    color: "var(--text-muted)",
-    fontFamily: "monospace",
-  },
-  meta: { fontSize: 13, color: "var(--text-muted)" },
-  body: {
-    padding: "0 20px 20px",
-    borderTop: "1px solid var(--border)",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 16,
-    paddingTop: 16,
-  },
-  section: {},
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: ".06em",
-    textTransform: "uppercase" as const,
-    color: "var(--text-muted)",
-    marginBottom: 8,
-  },
-  bodyText: { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.65 },
-  pillRow: { display: "flex", flexWrap: "wrap" as const, gap: 8 },
-  codeChip: {
-    background: "var(--surface-3)",
-    border: "1px solid var(--border)",
-    borderRadius: 4,
-    padding: "2px 10px",
-    fontSize: 12,
-    color: "#e2e8f0",
-    fontFamily: "monospace",
-  },
-  list: { paddingLeft: 20, display: "flex", flexDirection: "column" as const, gap: 6 },
-  listItem: { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5 },
-} as const;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import type { Socket } from "socket.io-client";
+import { Loader2 } from "lucide-react";
 
 interface Question {
   sessionId?: string;
@@ -66,12 +67,10 @@ export function MockInterviewTab({
   const [feedback, setFeedback] = useState<{ scores: Scores; feedback: string } | null>(null);
   const [report, setReport] = useState<Report | null>(null);
 
-  // Setup state
   const [selectedPersona, setSelectedPersona] = useState("friendly-senior");
   const [selectedDifficulty, setSelectedDifficulty] = useState("senior");
   const [submitting, setSubmitting] = useState(false);
 
-  // Timer state
   const [elapsedSec, setElapsedSec] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -109,7 +108,6 @@ export function MockInterviewTab({
     };
   }, [socket]);
 
-  // Handle question timer
   useEffect(() => {
     if (question && !feedback && !report) {
       timerRef.current = setInterval(() => {
@@ -125,7 +123,6 @@ export function MockInterviewTab({
 
   const start = () => {
     if (!socket) {
-      // Mock session for demo preview
       setReport(null);
       setQuestion({
         sessionId: "demo-sess",
@@ -149,7 +146,6 @@ export function MockInterviewTab({
     if (!answer.trim() || submitting) return;
     setSubmitting(true);
     if (!socket || !sessionId) {
-      // Mock score for demo preview
       setTimeout(() => {
         setFeedback({
           scores: { clarity: 85, depth: 80, specificity: 75, confidence: 90 },
@@ -164,7 +160,6 @@ export function MockInterviewTab({
 
   const next = () => {
     if (!socket || !sessionId) {
-      // Mock next for demo preview
       setReport({
         overallScore: 84,
         strengths: ["Clean modular explanation", "Database trade-off articulation", "Confident delivery"],
@@ -191,62 +186,65 @@ export function MockInterviewTab({
   /* ────────────────────────────────────────────────────────── */
   if (report) {
     const getVerdict = (score: number) => {
-      if (score >= 85) return { text: "Strong Hire", color: "badge-green" };
-      if (score >= 70) return { text: "Hire", color: "badge-teal" };
-      if (score >= 50) return { text: "Lean Hire", color: "badge-amber" };
-      return { text: "Needs Additional Preparation", color: "badge-red" };
+      if (score >= 85) return { text: "Strong Hire", color: "bg-green-500/20 text-green-400 border-green-500/30" };
+      if (score >= 70) return { text: "Hire", color: "bg-teal-500/20 text-teal-400 border-teal-500/30" };
+      if (score >= 50) return { text: "Lean Hire", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" };
+      return { text: "Needs Additional Preparation", color: "bg-red-500/20 text-red-400 border-red-500/30" };
     };
     const verdict = getVerdict(report.overallScore);
 
     return (
-      <div style={S.container}>
-        <div style={S.reportCard}>
-          <div style={S.reportHeader}>
+      <div className="space-y-6">
+        <div>
+          <p className="section-label">05 // MOCK INTERVIEW</p>
+          <h2 className="section-title">Mock Interview Scorecard</h2>
+        </div>
+
+        <div className="panel p-6 space-y-6">
+          <div className="flex items-center justify-between">
             <div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand-400)", textTransform: "uppercase" }}>
-                Evaluation Debrief
-              </span>
-              <h2 style={S.reportTitle}>Mock Interview Scorecard</h2>
+              <span className="text-xs font-mono uppercase tracking-wider text-lab-blue mb-1 block">Evaluation Debrief</span>
+              <h3 className="text-2xl font-display font-bold text-white">Mock Interview Scorecard</h3>
             </div>
-            <div style={S.overallBadgeWrap}>
-              <div style={S.scoreCircle}>
-                <span style={S.scoreNumber}>{report.overallScore}</span>
-                <span style={S.scoreSub}>/ 100</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-mono font-bold text-lab-blue">{report.overallScore}</span>
+                <span className="text-lab-textMuted">/ 100</span>
               </div>
-              <span className={`badge ${verdict.color}`} style={{ padding: "6px 14px", fontSize: 13, fontWeight: 700 }}>
+              <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-mono border ${verdict.color}`}>
                 {verdict.text}
               </span>
             </div>
           </div>
 
-          <hr style={S.divider} />
+          <hr className="border-lab-border" />
 
           {/* Strengths & Gaps Grid */}
-          <div style={S.grid2}>
-            <div style={S.metricCard}>
-              <div style={S.metricCardHeader}>
-                <span style={{ color: "var(--green)", fontSize: 16 }}>✓</span>
-                <span style={S.metricCardTitle}>Demonstrated Strengths</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-lab-card border border-lab-border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-green-400 text-xl">✓</span>
+                <span className="font-semibold text-white">Demonstrated Strengths</span>
               </div>
-              <ul style={S.metricList}>
+              <ul className="space-y-2">
                 {report.strengths.map((s, i) => (
-                  <li key={i} style={S.metricItem}>
-                    <span style={{ color: "var(--green)", marginRight: 8 }}>•</span>
+                  <li key={i} className="flex gap-2 text-sm text-lab-textMuted">
+                    <span className="text-green-400 shrink-0">•</span>
                     <span>{s}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div style={S.metricCard}>
-              <div style={S.metricCardHeader}>
-                <span style={{ color: "var(--amber)", fontSize: 16 }}>⚠</span>
-                <span style={S.metricCardTitle}>Target Improvement Areas</span>
+            <div className="bg-lab-card border border-lab-border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-amber-400 text-xl">⚠</span>
+                <span className="font-semibold text-white">Target Improvement Areas</span>
               </div>
-              <ul style={S.metricList}>
+              <ul className="space-y-2">
                 {report.gaps.map((g, i) => (
-                  <li key={i} style={S.metricItem}>
-                    <span style={{ color: "var(--amber)", marginRight: 8 }}>•</span>
+                  <li key={i} className="flex gap-2 text-sm text-lab-textMuted">
+                    <span className="text-amber-400 shrink-0">•</span>
                     <span>{g}</span>
                   </li>
                 ))}
@@ -255,22 +253,23 @@ export function MockInterviewTab({
           </div>
 
           {/* Study Suggestions */}
-          <div style={{ marginTop: 24 }}>
-            <h4 style={S.sectionHeading}>Targeted Revision Recommendations</h4>
-            <div style={S.suggestionBox}>
+          <div>
+            <h4 className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-3">Targeted Revision Recommendations</h4>
+            <div className="space-y-2">
               {report.studySuggestions.map((rec, i) => (
-                <div key={i} style={S.recRow}>
-                  <div style={S.recIcon}>📖</div>
-                  <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.5 }}>
-                    {rec}
-                  </div>
+                <div key={i} className="flex gap-3 px-4 py-3 bg-lab-card border border-lab-border rounded-lg">
+                  <span className="text-xl shrink-0">📖</span>
+                  <p className="text-sm text-white leading-relaxed">{rec}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 32 }}>
-            <button className="btn btn-primary" onClick={start}>
+          <div className="flex justify-end pt-4 border-t border-lab-border">
+            <button
+              className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors"
+              onClick={start}
+            >
               Start Another Session
             </button>
           </div>
@@ -284,39 +283,46 @@ export function MockInterviewTab({
   /* ────────────────────────────────────────────────────────── */
   if (!question) {
     return (
-      <div style={S.container}>
-        <div style={S.setupCard}>
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={S.heroIcon}>🎙️</div>
-            <h2 style={S.heroTitle}>Simulated Technical Interview</h2>
-            <p style={S.heroSubtitle}>
+      <div className="space-y-6">
+        <div>
+          <p className="section-label">05 // MOCK INTERVIEW</p>
+          <h2 className="section-title">Simulated Technical Interview</h2>
+        </div>
+
+        <div className="panel p-6 max-w-2xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="w-14 h-14 rounded-xl bg-lab-blueDim border border-lab-blue/30 flex items-center justify-center text-4xl mx-auto mb-4">
+              🎙️
+            </div>
+            <h3 className="text-xl font-display font-bold text-white mb-3">Simulated Technical Interview</h3>
+            <p className="text-lab-textMuted text-sm leading-relaxed max-w-xl mx-auto">
               Practice speaking on your repository under simulated pressure. Receive immediate rubric scores,
               depth evaluations, and actionable feedback tailored to your code.
             </p>
-            <span className="badge badge-yellow" style={{ fontSize: 11, background: "rgba(234,179,8,0.15)", color: "#eab308", border: "1px solid rgba(234,179,8,0.3)", marginTop: 12, display: "inline-block" }}>
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-400 border border-amber-500/30 mt-4">
               DEMO MODE
             </span>
           </div>
 
           {/* Persona selector */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={S.fieldLabel}>Interviewer Persona</label>
-            <div style={S.personaGrid}>
+          <div className="mb-6">
+            <label className="block text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-3">Interviewer Persona</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {PERSONAS.map((p) => {
                 const isSelected = selectedPersona === p.id;
                 return (
                   <div
                     key={p.id}
-                    style={{
-                      ...S.personaCard,
-                      borderColor: isSelected ? "var(--brand-400)" : "var(--border)",
-                      background: isSelected ? "rgba(13,148,136,0.12)" : "var(--surface-2)",
-                    }}
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      isSelected
+                        ? "border-lab-blue bg-lab-blue/10"
+                        : "border-lab-border bg-lab-card hover:border-lab-blue/40"
+                    }`}
                     onClick={() => setSelectedPersona(p.id)}
                   >
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>{p.icon}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>{p.desc}</div>
+                    <div className="text-3xl mb-2">{p.icon}</div>
+                    <div className="font-semibold text-white text-sm">{p.name}</div>
+                    <div className="text-xs text-lab-textMuted mt-1">{p.desc}</div>
                   </div>
                 );
               })}
@@ -324,32 +330,34 @@ export function MockInterviewTab({
           </div>
 
           {/* Difficulty selector */}
-          <div style={{ marginBottom: 32 }}>
-            <label style={S.fieldLabel}>Interview Target Level</label>
-            <div style={S.difficultyRow}>
+          <div className="mb-8">
+            <label className="block text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-3">Interview Target Level</label>
+            <div className="flex gap-3">
               {DIFFICULTIES.map((d) => {
                 const isSelected = selectedDifficulty === d.id;
                 return (
                   <button
                     key={d.id}
                     type="button"
-                    style={{
-                      ...S.difficultyBtn,
-                      background: isSelected ? "var(--brand-600)" : "var(--surface-2)",
-                      color: isSelected ? "#fff" : "var(--text-secondary)",
-                      borderColor: isSelected ? "var(--brand-400)" : "var(--border)",
-                    }}
+                    className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                      isSelected
+                        ? "bg-lab-blue text-black border-lab-blue"
+                        : "bg-lab-card text-lab-textMuted border-lab-border hover:border-lab-blue/40"
+                    }`}
                     onClick={() => setSelectedDifficulty(d.id)}
                   >
-                    <span style={{ fontWeight: 600 }}>{d.label}</span>
+                    <span className="font-semibold">{d.label}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <button className="btn btn-primary" onClick={start} style={{ padding: "12px 32px", fontSize: 15, fontWeight: 700 }}>
+          <div className="flex justify-center">
+            <button
+              className="px-8 py-3 text-base font-semibold rounded-lg bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors"
+              onClick={start}
+            >
               Begin Interview Simulation →
             </button>
           </div>
@@ -364,72 +372,78 @@ export function MockInterviewTab({
   const wordCount = answer.trim() ? answer.trim().split(/\s+/).length : 0;
 
   return (
-    <div style={S.container}>
-      <div style={S.activeQuestionCard}>
+    <div className="space-y-6">
+      <div>
+        <p className="section-label">05 // MOCK INTERVIEW</p>
+        <h2 className="section-title">Interview Simulation</h2>
+      </div>
+
+      <div className="panel p-6 max-w-3xl mx-auto space-y-6">
         {/* Top Info Bar */}
-        <div style={S.questionMetaBar}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="badge badge-teal">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-mono bg-teal-500/20 text-teal-400 border border-teal-500/30">
               Question {question.questionNumber} of {question.totalQuestions}
             </span>
-            <span style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "capitalize" }}>
-              Focus: <strong>{question.category}</strong>
+            <span className="text-xs text-lab-textMuted">
+              Focus: <strong className="text-white">{question.category}</strong>
             </span>
           </div>
 
-          <div style={S.timerPill}>
-            <span style={{ color: "var(--brand-400)", fontSize: 12 }}>⏱</span>
-            <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 600 }}>
-              {formatTime(elapsedSec)}
-            </span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-lab-card border border-lab-border">
+            <span className="text-lab-blue text-xs">⏱</span>
+            <span className="font-mono text-sm font-semibold tabular-nums">{formatTime(elapsedSec)}</span>
           </div>
         </div>
 
         {/* Question text */}
-        <h3 style={S.questionHeading}>{question.questionText}</h3>
+        <h3 className="text-xl font-display font-semibold text-white leading-snug">{question.questionText}</h3>
 
         {/* Interview tip */}
-        <div style={S.tipNotice}>
-          <span style={{ color: "var(--brand-400)", fontSize: 14 }}>💡</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-teal-500/10 border border-teal-500/20">
+          <span className="text-lab-blue text-lg">💡</span>
+          <span className="text-xs text-lab-textMuted">
             Tip: Frame your answer with the problem context, tech constraints, key decisions, and runtime trade-offs.
           </span>
         </div>
 
         {/* Answer textarea */}
-        <div style={{ position: "relative", marginTop: 16 }}>
+        <div className="relative">
           <textarea
-            style={S.textarea}
+            className="w-full bg-lab-card border border-lab-border rounded-lg px-4 py-4 text-white text-sm font-sans leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
             rows={8}
             placeholder="Type your response as if speaking in the interview. Explicitly name files, libraries, and design trade-offs..."
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             disabled={!!feedback || submitting}
           />
-          <div style={S.wordCounter}>
+          <div className="absolute bottom-3 right-3 text-[10px] text-lab-dim">
             {wordCount} {wordCount === 1 ? "word" : "words"}
           </div>
         </div>
 
         {/* Actions */}
-        <div style={S.actionsRow}>
+        <div className="flex justify-end">
           {!feedback ? (
             <button
-              className="btn btn-primary"
+              className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               onClick={submit}
               disabled={!answer.trim() || submitting}
             >
               {submitting ? (
                 <>
-                  <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                  <span>Evaluating answer...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Evaluating answer…</span>
                 </>
               ) : (
                 <span>Submit Answer for Review</span>
               )}
             </button>
           ) : (
-            <button className="btn btn-primary" onClick={next}>
+            <button
+              className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors"
+              onClick={next}
+            >
               {question.questionNumber >= question.totalQuestions ? "View Final Scorecard →" : "Next Question →"}
             </button>
           )}
@@ -437,16 +451,14 @@ export function MockInterviewTab({
 
         {/* Feedback Section */}
         {feedback && (
-          <div style={S.feedbackBox}>
-            <div style={S.feedbackHeader}>
-              <span style={{ fontSize: 16 }}>🎯</span>
-              <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-primary)" }}>
-                Interviewer Assessment
-              </span>
+          <div className="pt-6 border-t border-lab-border space-y-6">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎯</span>
+              <span className="font-semibold text-base text-white">Interviewer Assessment</span>
             </div>
 
             {/* Metric Meters */}
-            <div style={S.metricGrid}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ScoreMeter label="Clarity" value={feedback.scores.clarity} />
               <ScoreMeter label="Technical Depth" value={feedback.scores.depth} />
               <ScoreMeter label="Code Specificity" value={feedback.scores.specificity} />
@@ -454,13 +466,9 @@ export function MockInterviewTab({
             </div>
 
             {/* Qualitative Critique */}
-            <div style={S.critiqueBlock}>
-              <span style={{ fontWeight: 600, fontSize: 13, color: "var(--brand-200)", display: "block", marginBottom: 4 }}>
-                Reviewer Notes:
-              </span>
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)", margin: 0 }}>
-                {feedback.feedback}
-              </p>
+            <div className="px-4 py-3 rounded-lg bg-teal-500/05 border border-teal-500/15">
+              <p className="text-xs font-semibold text-teal-300 mb-1">Reviewer Notes:</p>
+              <p className="text-sm text-white leading-relaxed m-0">{feedback.feedback}</p>
             </div>
           </div>
         )}
@@ -471,308 +479,26 @@ export function MockInterviewTab({
 
 function ScoreMeter({ label, value }: { label: string; value: number }) {
   const getColor = (v: number) => {
-    if (v >= 80) return "var(--green)";
-    if (v >= 60) return "var(--brand-400)";
-    if (v >= 40) return "var(--amber)";
-    return "var(--red)";
+    if (v >= 80) return "bg-green-500";
+    if (v >= 60) return "bg-lab-blue";
+    if (v >= 40) return "bg-amber-500";
+    return "bg-red-500";
   };
 
   const color = getColor(value);
 
   return (
-    <div style={S.meterWrap}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
-        <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>{label}</span>
-        <span style={{ color, fontWeight: 700, fontFamily: "monospace" }}>{value}%</span>
+    <div className="bg-lab-card border border-lab-border rounded-lg p-3">
+      <div className="flex justify-between text-xs mb-2">
+        <span className="font-medium text-lab-textMuted">{label}</span>
+        <span className="font-mono font-bold text-white">{value}%</span>
       </div>
-      <div style={S.meterTrack}>
+      <div className="h-1.5 rounded-full bg-lab-bg overflow-hidden">
         <div
-          style={{
-            ...S.meterFill,
-            width: `${Math.min(100, Math.max(0, value))}%`,
-            background: color,
-          }}
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
         />
       </div>
     </div>
   );
 }
-
-const S = {
-  container: {
-    maxWidth: 880,
-    margin: "0 auto",
-  },
-  setupCard: {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-lg)",
-    padding: "36px 32px",
-    boxShadow: "var(--shadow-md)",
-  },
-  heroIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: "var(--r-lg)",
-    background: "rgba(13,148,136,0.12)",
-    border: "1px solid rgba(13,148,136,0.3)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 32,
-    margin: "0 auto 16px",
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: 800,
-    color: "var(--text-primary)",
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: "var(--text-secondary)",
-    maxWidth: 580,
-    margin: "0 auto",
-    lineHeight: 1.55,
-  },
-  fieldLabel: {
-    display: "block",
-    fontSize: 13,
-    fontWeight: 700,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-    color: "var(--text-muted)",
-    marginBottom: 12,
-  },
-  personaGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 12,
-  },
-  personaCard: {
-    padding: "16px",
-    borderRadius: "var(--r-md)",
-    border: "1px solid",
-    cursor: "pointer",
-    transition: "all 0.18s ease",
-  },
-  difficultyRow: {
-    display: "flex",
-    gap: 12,
-  },
-  difficultyBtn: {
-    flex: 1,
-    padding: "12px",
-    borderRadius: "var(--r-md)",
-    border: "1px solid",
-    cursor: "pointer",
-    fontSize: 13,
-    transition: "all 0.18s ease",
-  },
-  activeQuestionCard: {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-lg)",
-    padding: "28px 32px",
-    boxShadow: "var(--shadow-md)",
-  },
-  questionMetaBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  timerPill: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    padding: "4px 10px",
-    borderRadius: "var(--r-full)",
-  },
-  questionHeading: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--text-primary)",
-    lineHeight: 1.4,
-    marginBottom: 12,
-  },
-  tipNotice: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "rgba(13,148,136,0.08)",
-    border: "1px solid rgba(13,148,136,0.2)",
-    borderRadius: "var(--r-md)",
-    padding: "8px 12px",
-  },
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box" as const,
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-md)",
-    padding: "16px",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font)",
-    fontSize: 14,
-    lineHeight: 1.6,
-    outline: "none",
-    resize: "vertical" as const,
-  },
-  wordCounter: {
-    position: "absolute" as const,
-    bottom: 12,
-    right: 14,
-    fontSize: 11,
-    color: "var(--text-muted)",
-  },
-  actionsRow: {
-    display: "flex",
-    justifyContent: "flex-end",
-    marginTop: 16,
-  },
-  feedbackBox: {
-    marginTop: 24,
-    paddingTop: 20,
-    borderTop: "1px solid var(--border)",
-  },
-  feedbackHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  metricGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 16,
-    marginBottom: 20,
-  },
-  meterWrap: {
-    background: "var(--surface-2)",
-    padding: "12px",
-    borderRadius: "var(--r-md)",
-    border: "1px solid var(--border)",
-  },
-  meterTrack: {
-    height: 6,
-    background: "rgba(255,255,255,0.08)",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  meterFill: {
-    height: "100%",
-    borderRadius: 3,
-    transition: "width 0.4s ease",
-  },
-  critiqueBlock: {
-    background: "rgba(13,148,136,0.06)",
-    border: "1px solid rgba(13,148,136,0.2)",
-    borderRadius: "var(--r-md)",
-    padding: "14px 16px",
-  },
-  reportCard: {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-lg)",
-    padding: "36px 32px",
-    boxShadow: "var(--shadow-md)",
-  },
-  reportHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  reportTitle: {
-    fontSize: 24,
-    fontWeight: 800,
-    color: "var(--text-primary)",
-    marginTop: 4,
-  },
-  overallBadgeWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-  },
-  scoreCircle: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: 4,
-  },
-  scoreNumber: {
-    fontSize: 36,
-    fontWeight: 900,
-    color: "var(--brand-400)",
-    fontFamily: "monospace",
-  },
-  scoreSub: {
-    fontSize: 14,
-    color: "var(--text-muted)",
-  },
-  divider: {
-    border: "none",
-    borderTop: "1px solid var(--border)",
-    margin: "24px 0",
-  },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 16,
-  },
-  metricCard: {
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-md)",
-    padding: "18px",
-  },
-  metricCardHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  metricCardTitle: {
-    fontWeight: 700,
-    fontSize: 14,
-    color: "var(--text-primary)",
-  },
-  metricList: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-  },
-  metricItem: {
-    display: "flex",
-    fontSize: 13,
-    color: "var(--text-secondary)",
-    lineHeight: 1.5,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "var(--text-primary)",
-    marginBottom: 12,
-  },
-  suggestionBox: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-  },
-  recRow: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 10,
-    background: "var(--surface-2)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--r-md)",
-    padding: "12px 14px",
-  },
-  recIcon: {
-    fontSize: 16,
-  },
-} as const;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
@@ -51,41 +51,45 @@ export default function PublicAnalysisPage() {
   const [error, setError] = useState<string | null>(null);    const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "deployment">("modules");
 
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
     const poll = async () => {
       try {
         const data = await publicGet<AnalysisResult>(`/v1/public/${id}`);
+        if (cancelled) return;
         setResult(data);
         if (data.status !== "READY" && data.status !== "FAILED") {
-          timer = setInterval(poll, 3000);
+          timer = setTimeout(poll, 3000);
         }
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Failed to load analysis");
+        if (!cancelled) setError(e instanceof ApiError ? e.message : "Failed to load analysis");
       }
     };
+
     poll();
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [id]);
 
   if (error) {
     return (
-      <div style={S.page}>
-        <div className="gradient-bg" />
-        <div style={S.center}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Analysis not found</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>{error}</p>
-          <a href="/analyze" className="btn btn-primary" style={{ marginTop: 24 }}>Analyze another repo</a>
+      <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">
+        <div className="max-w-xl mx-auto py-32 px-6 text-center">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-2 text-white">Analysis not found</h2>
+          <p className="text-lab-textMuted text-sm">{error}</p>
+          <a href="/analyze" className="mt-6 inline-block px-4 py-2 bg-lab-blue text-black font-semibold rounded-lg hover:bg-lab-blue/80 transition-colors">
+            Analyze another repo
+          </a>
         </div>
       </div>
     );
   }
 
   if (result?.status === "FAILED") {
-    // Distinct message per failure category (PRD-I04) — the URL is almost
-    // never the problem, so the old catch-all "check the URL" copy sent
-    // users down the wrong path.
     const category = result.job?.errorCategory ?? "SYSTEM_ERROR";
     const messages: Record<string, string> = {
       NOT_FOUND: "This repository couldn't be found. Double-check the URL — it must point to a public GitHub repo.",
@@ -93,23 +97,24 @@ export default function PublicAnalysisPage() {
       SYSTEM_ERROR: "Something went wrong on our end. Your repo URL was fine — please try again in a bit.",
     };
     return (
-      <div style={S.page}>
-        <div className="gradient-bg" />
-        <div style={S.center}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Analysis failed</h2>
-          <p style={{ color: "var(--text-secondary)", fontSize: 14, maxWidth: 460, margin: "0 auto 16px" }}>
+      <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">
+        <div className="max-w-xl mx-auto py-32 px-6 text-center">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-2 text-white">Analysis failed</h2>
+          <p className="text-lab-textMuted text-sm max-w-md mx-auto mb-4">
             {messages[category] ?? messages.SYSTEM_ERROR}
           </p>
           {result.job?.errorMessage && (
-            <details style={{ marginBottom: 24, color: "var(--text-muted)", fontSize: 12 }}>
-              <summary style={{ cursor: "pointer" }}>Technical details</summary>
-              <code style={{ display: "block", marginTop: 8, wordBreak: "break-word" }}>
+            <details className="mb-6 text-lab-textMuted text-xs">
+              <summary className="cursor-pointer font-mono">Technical details</summary>
+              <code className="block mt-2 font-mono text-left bg-lab-card p-3 rounded border border-lab-border text-red-400 break-words">
                 {result.job.errorMessage}
               </code>
             </details>
           )}
-          <a href="/analyze" className="btn btn-primary">Try another repo</a>
+          <a href="/analyze" className="inline-block px-4 py-2 bg-lab-blue text-black font-semibold rounded-lg hover:bg-lab-blue/80 transition-colors">
+            Try another repo
+          </a>
         </div>
       </div>
     );
@@ -119,18 +124,17 @@ export default function PublicAnalysisPage() {
     const pct = result?.job?.progress ?? 0;
     const stage = result?.job?.stage ?? "QUEUED";
     return (
-      <div style={S.page}>
-        <div className="gradient-bg" />
-        <div style={S.center}>
-          <div className="spinner" style={{ margin: "0 auto 16px" }} />
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+      <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans flex items-center justify-center">
+        <div className="max-w-md w-full mx-auto py-24 px-6 text-center">
+          <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2 text-white font-display tracking-wide">
             Analyzing {result?.fullName ?? "repository"}…
           </h2>
-          <p style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 16 }}>
+          <p className="text-lab-textMuted text-sm font-mono mb-4">
             {stage} — {pct}%
           </p>
-          <div style={S.progressTrack}>
-            <div style={{ ...S.progressFill, width: `${pct}%` }} />
+          <div className="w-full h-1.5 bg-lab-border rounded-full overflow-hidden">
+            <div className="h-full bg-lab-blue transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
         </div>
       </div>
@@ -149,41 +153,63 @@ export default function PublicAnalysisPage() {
     }
   };
 
-  return (
-    <div style={S.page}>
-      <div className="gradient-bg" />
+  const fetchTree = useCallback(async () => {
+    const fileTreeArtifact = result?.artifacts.find(
+      (a) => a.artifactType === "file-tree"
+    );
+    if (!fileTreeArtifact) throw new Error("No file tree for this analysis");
+    return fileTreeArtifact.content as unknown as FileTreeNode;
+  }, [result]);
 
-      <nav style={S.nav}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <a href="/analyze" style={S.logoLink}>
-            <div style={S.logoIcon}>⚡</div>
+  const explainFile = useCallback(
+    (path: string) =>
+      publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path }),
+    [id]
+  );
+
+  return (
+    <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">
+      <nav className="sticky top-0 z-50 bg-lab-bg/85 backdrop-blur border-b border-lab-border px-6 md:px-10 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <a href="/analyze" className="no-underline text-current">
+            <div className="w-8 h-8 rounded-lg bg-lab-blueDim border border-lab-blue/30 flex items-center justify-center text-lab-blue font-bold shadow-[0_0_12px_rgba(0,216,255,0.2)]">
+              ⚡
+            </div>
           </a>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{result.fullName}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            <div className="font-bold text-sm text-white font-mono">{result.fullName}</div>
+            <div className="text-[11px] text-lab-textMuted font-mono">
               branch: {result.defaultBranch} · expires {new Date(result.expiresAt).toLocaleDateString()}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => void claimAnalysis()}>
+        <div className="flex gap-3 items-center">
+          <button
+            className="px-3 py-1.5 text-xs font-mono rounded-lg bg-lab-card border border-lab-border text-lab-textMuted hover:text-white hover:border-lab-blue/40 transition-colors"
+            onClick={() => void claimAnalysis()}
+          >
             Claim to account
           </button>
-          <a href="/login" className="btn btn-primary btn-sm">Sign in to save</a>
+          <a
+            href="/login"
+            className="px-3 py-1.5 text-xs font-mono font-semibold rounded-lg bg-lab-blue text-black hover:bg-lab-blue/80 transition-colors"
+          >
+            Sign in to save
+          </a>
         </div>
       </nav>
 
-      <div style={S.content}>
-        <nav style={S.tabBar}>
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 pb-20 space-y-6">
+        <nav className="flex gap-2 border-b border-lab-border pb-2">
           {(["modules", "files", "architecture", "deployment"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              style={{
-                ...S.tabBtn,
-                borderBottomColor: activeTab === t ? "#2dd4bf" : "transparent",
-                color: activeTab === t ? "#f0f4ff" : "var(--text-muted)",
-              }}
+              className={`px-4 py-2 text-xs font-mono uppercase tracking-wider rounded-lg transition-colors border ${
+                activeTab === t
+                  ? "bg-lab-blueDim text-lab-blue border-lab-blue/40 font-semibold"
+                  : "text-lab-textMuted hover:text-white border-transparent hover:bg-lab-card"
+              }`}
             >
               {t === "modules" && "🧩 "}
               {t === "files" && "🗂️ "}
@@ -195,74 +221,70 @@ export default function PublicAnalysisPage() {
         </nav>
 
         {activeTab === "modules" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4 }}>
+          <div className="space-y-4">
+            <p className="text-xs font-mono text-lab-textMuted uppercase tracking-wider">
               {result.modules.length} module{result.modules.length !== 1 ? "s" : ""} · reading order
             </p>
-            {result.modules
-              .slice()
-              .sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999))
-              .map((mod, i) => (
-              <div key={mod.id ?? mod.name} className="card" style={{ padding: "16px 20px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, minWidth: 20 }}>
-                    #{i + 1}
-                  </span>
-                  <span style={{ fontSize: 16, fontWeight: 700 }}>{mod.name}</span>
-                  {mod.path && (
-                    <code style={{ background: "var(--surface-3)", borderRadius: 4, padding: "1px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-                      {mod.path}
-                    </code>
-                  )}
-                  <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--text-muted)" }}>
-                    {mod.fileCount} files · {mod.lineCount?.toLocaleString()} lines
-                  </span>
-                </div>
-                {mod.purposeSummary && (
-                  <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginTop: 6, marginLeft: 30 }}>
-                    {mod.purposeSummary}
-                  </p>
-                )}
-              </div>
-            ))}
+            <div className="space-y-3">
+              {result.modules
+                .slice()
+                .sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999))
+                .map((mod, i) => (
+                  <div key={mod.id ?? mod.name} className="panel p-4">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <span className="text-xs font-mono text-lab-blue font-bold min-w-[20px]">
+                        #{i + 1}
+                      </span>
+                      <span className="font-semibold text-white text-base">{mod.name}</span>
+                      {mod.path && (
+                        <code className="px-2 py-0.5 rounded text-xs font-mono bg-lab-bg border border-lab-border text-lab-textMuted">
+                          {mod.path}
+                        </code>
+                      )}
+                      <span className="ml-auto text-xs font-mono text-lab-textMuted">
+                        {mod.fileCount} files · {mod.lineCount?.toLocaleString()} lines
+                      </span>
+                    </div>
+                    {mod.purposeSummary && (
+                      <p className="text-xs text-lab-textMuted leading-relaxed pl-7">
+                        {mod.purposeSummary}
+                      </p>
+                    )}
+                  </div>
+                ))}
+            </div>
           </div>
         )}
 
         {activeTab === "files" && (
           <FileGraphTab
-            fetchTree={async () => {
-              const fileTreeArtifact = result.artifacts.find(
-                (a) => a.artifactType === "file-tree"
-              );
-              if (!fileTreeArtifact) throw new Error("No file tree for this analysis");
-              return fileTreeArtifact.content as unknown as FileTreeNode;
-            }}
-            explainFile={(path) =>
-              publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path })
-            }
+            fetchTree={fetchTree}
+            explainFile={explainFile}
           />
         )}
 
         {activeTab === "architecture" && (
-          <div className="card" style={{ padding: 24 }}>
+          <div className="panel p-6 space-y-4">
+            <p className="section-label">01 // ARCHITECTURE</p>
             {archArtifact ? (
-              <pre style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", color: "var(--text-secondary)" }}>
+              <pre className="text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap bg-lab-bg p-4 rounded-lg border border-lab-border">
                 {JSON.stringify(archArtifact.content, null, 2)}
               </pre>
             ) : (
-              <p style={{ color: "var(--text-muted)" }}>No architecture overview generated.</p>
+              <p className="text-lab-textMuted text-sm">No architecture overview generated.</p>
             )}
           </div>
         )}
 
         {activeTab === "deployment" && (
-          <div className="card" style={{ padding: 24 }}>
+          <div className="panel p-6 space-y-4">
+            <p className="section-label">05 // DEPLOYMENT</p>
             {deployArtifact ? (
-              <pre style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", color: "var(--text-secondary)" }}>
+              <pre className="text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap bg-lab-bg p-4 rounded-lg border border-lab-border">
                 {JSON.stringify(deployArtifact.content, null, 2)}
               </pre>
             ) : (
-              <p style={{ color: "var(--text-muted)" }}>No deployment configuration detected.</p>
+              <p className="text-lab-textMuted text-sm">No deployment configuration detected.</p>
             )}
           </div>
         )}
@@ -271,35 +293,5 @@ export default function PublicAnalysisPage() {
   );
 }
 
-const S = {
-  page: { background: "#0a0c10", minHeight: "100vh", color: "#f0f4ff", fontFamily: "Inter, sans-serif", position: "relative" as const },
-  center: { maxWidth: 600, margin: "0 auto", padding: "120px 24px", textAlign: "center" as const },
-  nav: {
-    position: "sticky" as const, top: 0, zIndex: 50,
-    background: "rgba(10,12,16,.85)", backdropFilter: "blur(16px)",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
-    padding: "0 40px", height: 64,
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-  },
-  logoLink: { textDecoration: "none", color: "inherit" },
-  logoIcon: {
-    width: 34, height: 34,
-    background: "linear-gradient(135deg, #0d9488, #2dd4bf)",
-    borderRadius: 8,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 18, boxShadow: "0 0 20px rgba(13,148,136,.35)",
-  },
-  content: { maxWidth: 900, margin: "0 auto", padding: "24px 24px 80px" },
-  tabBar: { display: "flex", gap: 4, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 24 },
-  tabBtn: {
-    background: "none", border: "none", padding: "12px 16px", fontSize: 14, fontWeight: 600,
-    cursor: "pointer", borderBottom: "2px solid transparent", transition: "all .15s",
-  },
-  progressTrack: {
-    width: "100%", height: 6, background: "rgba(255,255,255,.08)", borderRadius: 3, overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%", background: "linear-gradient(90deg, #0d9488, #2dd4bf)", borderRadius: 3,
-    transition: "width .3s",
-  },
-} as const;
+
+
