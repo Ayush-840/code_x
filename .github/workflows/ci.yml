@@ -37,6 +37,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # seed.ts imports ../generated, which only exists after prisma generate.
       - run: pnpm --filter @vibe-coder/database exec prisma generate
+      # api/worker/websocket import @vibe-coder/shared, whose dist/ is built.
+      - run: pnpm --filter @vibe-coder/shared build
       - run: pnpm -r typecheck
 
   lint:
