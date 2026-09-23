@@ -89,3 +89,118 @@ code {
 
 /* Link styling */
 a { @apply text-lab-blue hover:underline; }
+
+/* ── Application Utility Classes (Lab OS Styled) ───────────── */
+
+/* Card / Surface */
+.card {
+  @apply bg-lab-panel border border-lab-border rounded-xl p-5 text-lab-text transition-colors duration-200;
+}
+.card:hover {
+  @apply border-lab-borderHover;
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-lab-panel/90 backdrop-blur-md border border-lab-border rounded-xl;
+}
+
+/* Page containers */
+.page {
+  @apply max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6;
+}
+.page-wide {
+  @apply max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6;
+}
+
+/* Buttons */
+.btn {
+  @apply inline-flex items-center justify-center font-mono text-xs font-semibold rounded-lg px-4 py-2 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-primary {
+  @apply bg-lab-blue text-black border border-lab-blue hover:bg-lab-blue/80 shadow-[0_0_15px_rgba(0,216,255,0.25)];
+}
+.btn-ghost {
+  @apply bg-lab-card border border-lab-border text-lab-textMuted hover:text-white hover:border-lab-blue/40 hover:bg-lab-blue/10;
+}
+.btn-sm {
+  @apply px-3 py-1.5 text-xs;
+}
+.btn-lg {
+  @apply px-6 py-3 text-sm tracking-wider uppercase;
+}
+
+/* Badges */
+.badge {
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider font-semibold border;
+}
+.badge-green {
+  @apply bg-emerald-500/15 text-emerald-400 border-emerald-500/30;
+}
+.badge-blue {
+  @apply bg-lab-blueDim text-lab-blue border-lab-blue/30;
+}
+.badge-red {
+  @apply bg-rose-500/15 text-rose-400 border-rose-500/30;
+}
+.badge-gray {
+  @apply bg-lab-card text-lab-textMuted border-lab-border;
+}
+
+/* Navigation bar */
+.app-nav {
+  @apply sticky top-0 z-50 bg-lab-bg/90 backdrop-blur-md border-b border-lab-border px-6 md:px-10 h-16 flex items-center justify-between;
+}
+.app-logo {
+  @apply flex items-center gap-2.5 font-display text-xl text-white tracking-wide font-bold;
+}
+.app-logo-icon {
+  @apply w-8 h-8 rounded-lg bg-lab-blueDim border border-lab-blue/40 text-lab-blue flex items-center justify-center text-sm shadow-[0_0_12px_rgba(0,216,255,0.3)];
+}
+
+/* Tab bar */
+.tab-bar {
+  @apply flex gap-2 border-b border-lab-border pb-2 overflow-x-auto;
+}
+.tab-btn {
+  @apply px-4 py-2 text-xs font-mono uppercase tracking-wider rounded-lg border border-transparent text-lab-textMuted hover:text-white hover:bg-lab-card transition-all whitespace-nowrap;
+}
+.tab-btn.active {
+  @apply bg-lab-blueDim text-lab-blue border-lab-blue/40 font-semibold shadow-[0_0_10px_rgba(0,216,255,0.15)];
+}
+
+/* Inputs */
+.input {
+  @apply bg-lab-card border border-lab-border rounded-lg px-3 py-2 text-white text-xs font-mono placeholder-lab-dim focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent transition-all;
+}
+
+/* Text Gradient */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-lab-blue via-cyan-200 to-white;
+}
+
+/* Progress bar */
+.progress-track {
+  @apply w-full h-1.5 bg-lab-border rounded-full overflow-hidden;
+}
+.progress-fill {
+  @apply h-full bg-lab-blue transition-all duration-300;
+}
+
+/* Spinner */
+.spinner {
+  @apply w-6 h-6 border-2 border-lab-blue border-t-transparent rounded-full animate-spin;
+}
+
+/* Background grid */
+.gradient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 216, 255, 0.08) 0%, transparent 50%),
+    linear-gradient(to right, rgba(26, 26, 38, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(26, 26, 38, 0.3) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}

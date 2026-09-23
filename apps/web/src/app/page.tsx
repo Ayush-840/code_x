@@ -78,70 +78,78 @@ export default function LandingPage() {
   }, [router]);
 
   if (!mounted) {
-    return <div style={{ background: "#0a0c10", minHeight: "100vh" }} />;
+    return <div className="bg-lab-bg min-h-screen" />;
   }
 
   return (
-    <div style={{ background: "#0a0c10", color: "#f0f4ff", minHeight: "100vh", fontFamily: "Inter, sans-serif" }}>
+    <div className="bg-lab-bg text-lab-text min-h-screen font-sans relative">
       {/* Animated background */}
       <div className="gradient-bg" />
 
       {/* Nav */}
-      <nav style={S.nav}>
-        <div style={S.navLogo}>
-          <div style={S.logoIcon}>⚡</div>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>Vibe Coder</span>
+      <nav className="app-nav">
+        <div className="app-logo">
+          <div className="app-logo-icon">⚡</div>
+          <span className="font-display tracking-wide">Vibe Coder</span>
         </div>
-        <div style={S.navRight}>
-          <a href="/analyze" style={S.navLink}>Public analysis</a>
-          <a href="/login" style={S.navLink}>Sign in</a>
-          <a href="/login" className="btn btn-primary btn-sm">Get started</a>
+        <div className="flex items-center gap-4">
+          <a href="/analyze" className="text-xs font-mono text-lab-textMuted hover:text-white transition-colors">
+            Public analysis
+          </a>
+          <a href="/login" className="text-xs font-mono text-lab-textMuted hover:text-white transition-colors">
+            Sign in
+          </a>
+          <a href="/login" className="btn btn-primary btn-sm">
+            Get started
+          </a>
         </div>
       </nav>
 
       {/* Hero */}
-      <section style={S.hero}>
-        <div className="fade-up" style={S.heroTag}>
-          <span style={S.tagDot} />
+      <section className="max-w-4xl mx-auto px-6 pt-20 pb-16 text-center relative z-10">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-lab-blueDim border border-lab-blue/30 text-[11px] font-mono uppercase tracking-wider text-lab-blue mb-8">
+          <span className="w-1.5 h-1.5 rounded-full bg-lab-blue animate-pulse" />
           AI-powered · Citation-grounded · Repository-connected
         </div>
 
-        <h1 className="fade-up fade-up-delay-1" style={S.heroTitle}>
+        <h1 className="font-display text-5xl sm:text-7xl font-bold tracking-tight mb-6 leading-tight text-white">
           You built it.<br />
           <span className="text-gradient">Can you explain it?</span>
         </h1>
 
-        <p className="fade-up fade-up-delay-2" style={S.heroSub}>
+        <p className="text-lab-textMuted text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-sans">
           Connect any GitHub repository and Vibe Coder builds an interview-ready study guide from your
           actual code — architecture diagrams, module walkthroughs, a curated question bank, and a
           live mock-interview simulator that scores your answers in real time.
         </p>
 
-        <div className="fade-up fade-up-delay-3" style={S.heroActions}>
-          <a href="/login" className="btn btn-primary btn-lg" style={{ gap: 10 }}>
+        <div className="flex gap-4 justify-center flex-wrap mb-16">
+          <a href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
             <span>Connect your repo</span>
             <span>→</span>
           </a>
-          <a href="#how" className="btn btn-ghost btn-lg">See how it works</a>
+          <a href="#how" className="btn btn-ghost btn-lg">
+            See how it works
+          </a>
         </div>
 
         {/* Terminal mockup */}
-        <div className="fade-up fade-up-delay-4 glass" style={S.terminal}>
-          <div style={S.terminalDots}>
-            {["#ff5f56","#ffbd2e","#27c93f"].map(c => (
-              <span key={c} style={{ width: 12, height: 12, borderRadius: "50%", background: c, display: "inline-block" }} />
+        <div className="glass max-w-2xl mx-auto overflow-hidden text-left border border-lab-border shadow-2xl">
+          <div className="flex gap-2 px-4 py-3 border-b border-lab-border bg-lab-card/50">
+            {["#ff5f56", "#ffbd2e", "#27c93f"].map((c) => (
+              <span key={c} className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: c }} />
             ))}
           </div>
-          <div style={S.terminalBody}>
-            <TerminalLine color="#94a3b8" text="$ vibe-coder connect https://github.com/you/my-app" />
-            <TerminalLine color="#4ade80" text="✓  Cloning repository…" delay={0.4} />
-            <TerminalLine color="#4ade80" text="✓  AST parsing 347 files across 12 modules…" delay={0.8} />
-            <TerminalLine color="#4ade80" text="✓  Indexing 2,841 code chunks (dense + BM25)…" delay={1.2} />
-            <TerminalLine color="#4ade80" text="✓  Generating architecture overview…" delay={1.6} />
-            <TerminalLine color="#2dd4bf" text="✓  Study guide ready. 47 interview questions generated." delay={2.0} />
-            <TerminalLine color="#60a5fa" text='$ ask "How does authentication work?"' delay={2.5} />
+          <div className="p-5 font-mono text-xs space-y-1.5 bg-black/40">
+            <TerminalLine color="#8B8B9E" text="$ vibe-coder connect https://github.com/you/my-app" />
+            <TerminalLine color="#00D8FF" text="✓  Cloning repository…" delay={0.4} />
+            <TerminalLine color="#00D8FF" text="✓  AST parsing 347 files across 12 modules…" delay={0.8} />
+            <TerminalLine color="#00D8FF" text="✓  Indexing 2,841 code chunks (dense + BM25)…" delay={1.2} />
+            <TerminalLine color="#00D8FF" text="✓  Generating architecture overview…" delay={1.6} />
+            <TerminalLine color="#00D8FF" text="✓  Study guide ready. 47 interview questions generated." delay={2.0} />
+            <TerminalLine color="#F2F2F5" text='$ ask "How does authentication work?"' delay={2.5} />
             <TerminalLine
-              color="#e2e8f0"
+              color="#8B8B9E"
               text={'The auth module (src/auth/middleware.ts:12-48) uses stateless JWTs…\n[src/auth/middleware.ts:12-48] [src/routes/auth.ts:31-67]'}
               delay={3.0}
             />
@@ -150,57 +158,75 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section id="how" style={S.section}>
-        <h2 style={S.sectionTitle}>How Vibe Coder works</h2>
-        <p style={S.sectionSub}>Four phases. One goal: from repository to interview confidence.</p>
-        <div style={S.stagesGrid}>
+      <section id="how" className="max-w-5xl mx-auto px-6 py-20 relative z-10">
+        <p className="section-label text-center">01 // WORKFLOW</p>
+        <h2 className="section-title text-center mb-3">How Vibe Coder works</h2>
+        <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
+          Four phases. One goal: from repository to interview confidence.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {STAGES.map((stage, i) => (
-            <div key={stage.label} className="card" style={S.stageCard}>
-              <div style={S.stageNum}>{String(i + 1).padStart(2, "0")}</div>
-              <div style={S.stageLabel}>{stage.label}</div>
-              <div style={S.stageDesc}>{stage.desc}</div>
+            <div key={stage.label} className="panel p-5 space-y-2">
+              <div className="font-display text-4xl text-lab-blue/30 font-bold">
+                {String(i + 1).padStart(2, "0")}
+              </div>
+              <div className="font-semibold text-white text-sm">{stage.label}</div>
+              <div className="text-xs text-lab-textMuted leading-relaxed">{stage.desc}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* Features */}
-      <section style={S.section}>
-        <h2 style={S.sectionTitle}>Everything you need to ace the interview</h2>
-        <p style={S.sectionSub}>From repository connection to interview-day confidence — all in one place.</p>
-        <div style={S.featGrid}>
-          {FEATURES.map(f => (
-            <div key={f.title} className="card" style={S.featCard}>
-              <div style={S.featIcon}>{f.icon}</div>
-              <h3 style={S.featTitle}>{f.title}</h3>
-              <p style={S.featDesc}>{f.desc}</p>
+      <section className="max-w-5xl mx-auto px-6 py-20 relative z-10">
+        <p className="section-label text-center">02 // CAPABILITIES</p>
+        <h2 className="section-title text-center mb-3">Everything you need to ace the interview</h2>
+        <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
+          From repository connection to interview-day confidence — all in one place.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="panel p-5 space-y-2">
+              <div className="text-3xl mb-1">{f.icon}</div>
+              <h3 className="font-semibold text-white text-sm">{f.title}</h3>
+              <p className="text-xs text-lab-textMuted leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Comparison table */}
-      <section style={S.section}>
-        <h2 style={S.sectionTitle}>Why Vibe Coder?</h2>
-        <p style={S.sectionSub}>No other tool combines repository connection, interview prep, and citation grounding.</p>
-        <div className="glass" style={S.table}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <section className="max-w-5xl mx-auto px-6 py-20 relative z-10">
+        <p className="section-label text-center">03 // COMPARISON</p>
+        <h2 className="section-title text-center mb-3">Why Vibe Coder?</h2>
+        <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
+          No other tool combines repository connection, interview prep, and citation grounding.
+        </p>
+        <div className="panel p-0 overflow-hidden">
+          <table className="w-full border-collapse font-mono text-xs">
             <thead>
-              <tr>
-                {["Platform", "Interview Prep", "Repo-Connected", "Citation-Grounded"].map(h => (
-                  <th key={h} style={S.th}>{h}</th>
+              <tr className="border-b border-lab-border bg-lab-card/50">
+                {["Platform", "Interview Prep", "Repo-Connected", "Citation-Grounded"].map((h) => (
+                  <th key={h} className="p-4 text-left font-semibold text-lab-textMuted uppercase tracking-wider">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {COMPETITORS.map(c => (
-                <tr key={c.name} style={c.highlight ? S.trHighlight : S.tr}>
-                  <td style={{ ...S.td, fontWeight: c.highlight ? 700 : 400, color: c.highlight ? "#2dd4bf" : "#f0f4ff" }}>
+              {COMPETITORS.map((c) => (
+                <tr
+                  key={c.name}
+                  className={`border-b border-lab-border/50 transition-colors ${
+                    c.highlight ? "bg-lab-blueDim/40" : "hover:bg-lab-card/30"
+                  }`}
+                >
+                  <td className={`p-4 font-sans ${c.highlight ? "font-bold text-lab-blue" : "text-white"}`}>
                     {c.name}
                   </td>
-                  <td style={{ ...S.td, textAlign: "center" }}><Check on={c.interviewPrep} /></td>
-                  <td style={{ ...S.td, textAlign: "center" }}><Check on={c.repoConnected} /></td>
-                  <td style={{ ...S.td, textAlign: "center" }}><Check on={c.citationGrounded} /></td>
+                  <td className="p-4 text-center"><Check on={c.interviewPrep} /></td>
+                  <td className="p-4 text-center"><Check on={c.repoConnected} /></td>
+                  <td className="p-4 text-center"><Check on={c.citationGrounded} /></td>
                 </tr>
               ))}
             </tbody>
@@ -209,29 +235,31 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section style={S.cta}>
-        <div className="glass" style={S.ctaCard}>
-          <h2 style={{ fontSize: 36, fontWeight: 800, marginBottom: 12 }}>
+      <section className="max-w-3xl mx-auto px-6 py-20 text-center relative z-10">
+        <div className="panel p-10 space-y-4 border-lab-blue/30">
+          <h2 className="font-display text-4xl font-bold text-white">
             Ready to master your own code?
           </h2>
-          <p style={{ color: "var(--text-secondary)", fontSize: 18, marginBottom: 32 }}>
+          <p className="text-lab-textMuted text-sm max-w-md mx-auto">
             Connect a GitHub repository and generate your study guide in minutes.
           </p>
-          <a href="/login" className="btn btn-primary btn-lg">
-            Get started for free →
-          </a>
+          <div className="pt-4">
+            <a href="/login" className="btn btn-primary btn-lg">
+              Get started for free →
+            </a>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer style={S.footer}>
-        <div style={S.footerLogo}>
-          <div style={S.logoIcon}>⚡</div>
-          <span style={{ fontWeight: 700 }}>Vibe Coder</span>
+      <footer className="border-t border-lab-border py-8 px-6 text-center space-y-2 relative z-10 font-mono text-xs text-lab-textMuted">
+        <div className="flex items-center justify-center gap-2 font-display text-base text-white">
+          <div className="w-5 h-5 rounded bg-lab-blueDim border border-lab-blue/30 text-lab-blue flex items-center justify-center text-xs">
+            ⚡
+          </div>
+          <span>Vibe Coder</span>
         </div>
-        <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-          AI-powered interview preparation. Built for the vibe-coding generation.
-        </p>
+        <p>AI-powered interview preparation. Built for the vibe-coding generation.</p>
       </footer>
     </div>
   );
@@ -239,139 +267,18 @@ export default function LandingPage() {
 
 function TerminalLine({ text, color, delay = 0 }: { text: string; color: string; delay?: number }) {
   return (
-    <div style={{
-      color,
-      fontSize: 13,
-      lineHeight: 1.7,
-      fontFamily: "monospace",
-      animation: `fadeUp .4s ease both`,
-      animationDelay: `${delay}s`,
-      whiteSpace: "pre-wrap",
-    }}>
+    <div
+      style={{
+        color,
+        fontSize: 12,
+        lineHeight: 1.7,
+        fontFamily: "monospace",
+        animation: `fadeUp .4s ease both`,
+        animationDelay: `${delay}s`,
+        whiteSpace: "pre-wrap",
+      }}
+    >
       {text}
     </div>
   );
 }
-
-const S = {
-  nav: {
-    position: "sticky" as const,
-    top: 0,
-    zIndex: 50,
-    background: "rgba(10,12,16,.85)",
-    backdropFilter: "blur(16px)",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
-    padding: "0 40px",
-    height: 64,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  navLogo: { display: "flex", alignItems: "center", gap: 10 },
-  logoIcon: {
-    width: 34, height: 34,
-    background: "linear-gradient(135deg, #0d9488, #2dd4bf)",
-    borderRadius: 8,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 18,
-    boxShadow: "0 0 20px rgba(13,148,136,.35)",
-  },
-  navRight: { display: "flex", alignItems: "center", gap: 16 },
-  navLink: { color: "var(--text-secondary)", fontSize: 14, fontWeight: 500 },
-
-  hero: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "80px 24px 60px",
-    textAlign: "center" as const,
-  },
-  heroTag: {
-    display: "inline-flex", alignItems: "center", gap: 8,
-    background: "rgba(13,148,136,.12)",
-    border: "1px solid rgba(13,148,136,.3)",
-    borderRadius: 999,
-    padding: "5px 14px",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#2dd4bf",
-    letterSpacing: ".04em",
-    marginBottom: 28,
-    textTransform: "uppercase" as const,
-  },
-  tagDot: {
-    width: 6, height: 6,
-    background: "#2dd4bf",
-    borderRadius: "50%",
-    boxShadow: "0 0 6px #2dd4bf",
-    animation: "pulse-dot 1.5s ease-in-out infinite",
-  },
-  heroTitle: {
-    fontSize: "clamp(40px, 7vw, 72px)",
-    fontWeight: 900,
-    lineHeight: 1.1,
-    marginBottom: 24,
-    letterSpacing: "-.02em",
-  },
-  heroSub: {
-    fontSize: "clamp(16px, 2vw, 20px)",
-    color: "var(--text-secondary)",
-    lineHeight: 1.65,
-    maxWidth: 680,
-    margin: "0 auto 36px",
-  },
-  heroActions: { display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" as const, marginBottom: 48 },
-
-  terminal: {
-    maxWidth: 700,
-    margin: "0 auto",
-    padding: "0",
-    overflow: "hidden",
-  },
-  terminalDots: {
-    display: "flex", gap: 8, padding: "14px 18px",
-    borderBottom: "1px solid rgba(255,255,255,.06)",
-  },
-  terminalBody: {
-    padding: "20px 24px",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 4,
-    background: "rgba(0,0,0,.3)",
-  },
-
-  section: { maxWidth: 1060, margin: "0 auto", padding: "80px 24px" },
-  sectionTitle: { fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 800, textAlign: "center" as const, marginBottom: 12, letterSpacing: "-.02em" },
-  sectionSub: { color: "var(--text-secondary)", textAlign: "center" as const, fontSize: 18, marginBottom: 52, maxWidth: 560, margin: "0 auto 52px" },
-
-  stagesGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 },
-  stageCard: { position: "relative" as const },
-  stageNum: { fontSize: 44, fontWeight: 900, color: "rgba(20,184,166,.2)", lineHeight: 1, marginBottom: 12, fontVariantNumeric: "tabular-nums" },
-  stageLabel: { fontSize: 17, fontWeight: 700, marginBottom: 6, color: "var(--text-primary)" },
-  stageDesc: { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.55 },
-
-  featGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 },
-  featCard: { display: "flex", flexDirection: "column" as const, gap: 10 },
-  featIcon: { fontSize: 32 },
-  featTitle: { fontSize: 17, fontWeight: 700, color: "var(--text-primary)" },
-  featDesc: { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6 },
-
-  table: { padding: 0, overflow: "hidden" },
-  th: { padding: "14px 20px", textAlign: "left" as const, fontSize: 12, fontWeight: 700, color: "var(--text-muted)", letterSpacing: ".05em", textTransform: "uppercase" as const, borderBottom: "1px solid rgba(255,255,255,.08)" },
-  td: { padding: "14px 20px", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,.05)" },
-  tr: { transition: "background .15s" },
-  trHighlight: { background: "rgba(13,148,136,.07)" },
-
-  cta: { padding: "80px 24px", textAlign: "center" as const },
-  ctaCard: { maxWidth: 640, margin: "0 auto", padding: "60px 48px" },
-
-  footer: {
-    borderTop: "1px solid rgba(255,255,255,.06)",
-    padding: "32px 40px",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    gap: 10,
-    textAlign: "center" as const,
-  },
-  footerLogo: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16 },
-} as const;

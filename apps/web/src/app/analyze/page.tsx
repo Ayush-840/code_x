@@ -34,37 +34,43 @@ export default function AnalyzePage() {
   };
 
   return (
-    <div style={{ background: "#0a0c10", minHeight: "100vh", color: "#f0f4ff", fontFamily: "Inter, sans-serif" }}>
+    <div className="bg-lab-bg text-lab-text min-h-screen font-sans relative">
       <div className="gradient-bg" />
 
-      <nav style={S.nav}>
-        <a href="/" style={S.logoLink}>
-          <div style={S.logoIcon}>⚡</div>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>Vibe Coder</span>
+      <nav className="app-nav">
+        <a href="/" className="flex items-center gap-2.5 font-display text-xl text-white font-bold no-underline">
+          <div className="w-8 h-8 rounded-lg bg-lab-blueDim border border-lab-blue/40 text-lab-blue flex items-center justify-center text-sm shadow-[0_0_12px_rgba(0,216,255,0.3)]">
+            ⚡
+          </div>
+          <span>Vibe Coder</span>
         </a>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <a href="/login" style={{ color: "var(--text-secondary)", fontSize: 14 }}>Sign in</a>
-          <a href="/login" className="btn btn-primary btn-sm">Get started</a>
+        <div className="flex gap-4 items-center">
+          <a href="/login" className="text-xs font-mono text-lab-textMuted hover:text-white transition-colors">
+            Sign in
+          </a>
+          <a href="/login" className="btn btn-primary btn-sm">
+            Get started
+          </a>
         </div>
       </nav>
 
-      <section style={S.hero}>
-        <div style={S.tag}>
-          <span style={S.tagDot} />
+      <section className="max-w-xl mx-auto px-6 py-24 text-center relative z-10">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-lab-blueDim border border-lab-blue/30 text-[11px] font-mono uppercase tracking-wider text-lab-blue mb-6">
+          <span className="w-1.5 h-1.5 rounded-full bg-lab-blue animate-pulse" />
           No login required
         </div>
 
-        <h1 style={S.title}>
+        <h1 className="font-display text-4xl sm:text-6xl font-bold tracking-tight mb-4 text-white">
           Analyze any <span className="text-gradient">public repository</span>
         </h1>
-        <p style={S.sub}>
+        <p className="text-lab-textMuted text-sm sm:text-base max-w-md mx-auto mb-10 leading-relaxed">
           Paste a GitHub URL and get an AI-powered architecture overview, module breakdown,
           reading order, and deployment detection — instantly.
         </p>
 
-        <div style={S.inputRow}>
+        <div className="flex gap-2 max-w-md mx-auto mb-3">
           <input
-            style={S.input}
+            className="input flex-1 h-12 text-sm"
             placeholder="https://github.com/owner/repo"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
@@ -72,17 +78,16 @@ export default function AnalyzePage() {
             disabled={busy}
           />
           <button
-            className="btn btn-primary"
-            style={{ padding: "0 28px", height: 48, fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" as const }}
+            className="btn btn-primary h-12 px-6 text-sm font-semibold whitespace-nowrap"
             disabled={busy || !repoUrl}
             onClick={() => void submit()}
           >
             {busy ? "Analyzing…" : "Analyze"}
           </button>
         </div>
-        {error && <p style={{ color: "#f87171", fontSize: 13, marginTop: 10 }}>{error}</p>}
+        {error && <p className="text-xs text-rose-400 font-mono mt-2">{error}</p>}
 
-        <p style={S.hint}>
+        <p className="text-xs text-lab-dim font-mono mt-6">
           Only public repositories. Results expire after 7 days.
         </p>
       </section>
@@ -90,44 +95,3 @@ export default function AnalyzePage() {
   );
 }
 
-const S = {
-  nav: {
-    position: "sticky" as const, top: 0, zIndex: 50,
-    background: "rgba(10,12,16,.85)", backdropFilter: "blur(16px)",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
-    padding: "0 40px", height: 64,
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-  },
-  logoLink: { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit" },
-  logoIcon: {
-    width: 34, height: 34,
-    background: "linear-gradient(135deg, #0d9488, #2dd4bf)",
-    borderRadius: 8,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 18, boxShadow: "0 0 20px rgba(13,148,136,.35)",
-  },
-  hero: {
-    maxWidth: 700, margin: "0 auto", padding: "100px 24px 60px", textAlign: "center" as const,
-  },
-  tag: {
-    display: "inline-flex", alignItems: "center", gap: 8,
-    background: "rgba(13,148,136,.12)", border: "1px solid rgba(13,148,136,.3)",
-    borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 600,
-    color: "#2dd4bf", letterSpacing: ".04em", textTransform: "uppercase" as const, marginBottom: 28,
-  },
-  tagDot: {
-    width: 6, height: 6, background: "#2dd4bf", borderRadius: "50%",
-    boxShadow: "0 0 6px #2dd4bf", animation: "pulse-dot 1.5s ease-in-out infinite",
-  },
-  title: { fontSize: "clamp(32px, 5vw, 52px)", fontWeight: 900, lineHeight: 1.15, marginBottom: 16, letterSpacing: "-.02em" },
-  sub: { fontSize: 18, color: "var(--text-secondary)", lineHeight: 1.65, maxWidth: 560, margin: "0 auto 36px" },
-  inputRow: {
-    display: "flex", gap: 10, maxWidth: 540, margin: "0 auto",
-  },
-  input: {
-    flex: 1, height: 48, padding: "0 16px", borderRadius: 10,
-    border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.06)",
-    color: "#f0f4ff", fontSize: 15, outline: "none",
-  },
-  hint: { color: "var(--text-muted)", fontSize: 13, marginTop: 14 },
-} as const;
