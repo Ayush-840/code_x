@@ -6,6 +6,7 @@ import { HttpError, ok } from "../middleware/errors";
 import { notifyProgress } from "../services/analysis";
 import { anonymousRateLimit, fileExplainRateLimit } from "../middleware/rateLimit";
 import { requireAuth, type AuthedRequest } from "../middleware/auth";
+import { assertAnalysisReady } from "../services/readiness";
 
 const router = Router();
 
@@ -41,6 +42,10 @@ router.post("/analyze", anonymousRateLimit("analyze"), async (req, res, next) =>
     if (!repoUrl) {
       throw new HttpError(400, "VALIDATION_ERROR", "repoUrl is required");
     }
+    // Refuse work up front when the pipeline is degraded (PRD-I03): a 503
+    // that names the offline dependency beats a job that fails minutes later
+    // with a message that reads like a bad URL.
+    await assertAnalysisReady();
     const { owner, repo } = parseRepoUrl(repoUrl);
     const fullName = `${owner}/${repo}`;
     const requestIp = req.ip ?? "unknown";

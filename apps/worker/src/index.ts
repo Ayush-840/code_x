@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 
 import { analyzeRepo } from "./jobs/analyzeRepo";
 import { assertMigrationsApplied } from "@vibe-coder/database/migrations";
+import { bootReadinessCheck, startHeartbeat } from "./readiness";
 
 // Load .env — try CWD first, then walk up to workspace root (same policy as
 // apps/api/src/config.ts; the worker previously relied on bare dotenv/config).
@@ -26,6 +27,16 @@ assertMigrationsApplied();
 const connection = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
   maxRetriesPerRequest: null,
 });
+
+// Boot gate (PRD-I03): a worker that can't reach the DB or a Python service
+// would burn a clone + a job per attempt. Diagnose and exit loudly instead.
+void (async () => {
+  const ready = await bootReadinessCheck();
+  if (!ready) {
+    process.exit(1);
+  }
+  startHeartbeat(connection);
+})();
 
 export const worker = new Worker(
   "analysis",

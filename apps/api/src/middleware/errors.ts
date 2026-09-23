@@ -40,6 +40,19 @@ export function notFound(_req: Request, res: Response): void {
   fail(res, 404, "NOT_FOUND", "Resource does not exist");
 }
 
+/**
+ * Infra outages (DB/Redis unreachable) surface as driver-specific errors with
+ * no useful taxonomy. Map the recognizable ones to an honest 503 so clients
+ * see "backend down, retry", not a 500 that reads like a bug — and so the
+ * frontend can distinguish it from repo-URL problems.
+ */
+function isInfraUnavailableError(err: unknown): boolean {
+  const msg = String((err as Error)?.message ?? "");
+  return /ECONNREFUSED|ETIMEDOUT|ECONNRESET|Can't reach database server|P1001|Connection terminated/i.test(
+    msg
+  );
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
@@ -48,6 +61,16 @@ export function errorHandler(
 ): void {
   if (err instanceof HttpError) {
     fail(res, err.status, err.code, err.message);
+    return;
+  }
+  if (isInfraUnavailableError(err)) {
+    console.error("[api] infra unavailable:", (err as Error)?.message);
+    fail(
+      res,
+      503,
+      "ANALYSIS_UNAVAILABLE",
+      "The analysis backend isn't fully up right now. Your repository URL is fine — please retry in a minute."
+    );
     return;
   }
   console.error(err);

@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import { requireAuth } from "./middleware/auth";
 import { errorHandler, notFound } from "./middleware/errors";
 import { config } from "./config";
+import { getReadiness } from "./services/readiness";
 
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
@@ -39,6 +40,14 @@ export function createApp() {
   app.use(cookieParser());
 
   app.get("/health", (_req, res) => res.json({ ok: true, service: "api" }));
+
+  // Liveness vs readiness: /health says the process is up; /health/ready says
+  // the analysis pipeline can actually accept work. Deploy tools and the
+  // on-call runbook should gate on this one.
+  app.get("/health/ready", async (_req, res) => {
+    const { ready, deps } = await getReadiness();
+    res.status(ready ? 200 : 503).json({ ok: ready, deps });
+  });
 
   app.use("/v1/auth", authRoutes);
   // Must be mounted before any broad `app.use("/v1", requireAuth, ...)` layer:

@@ -5,6 +5,7 @@ import { analysisQueue } from "../redis";
 import type { AuthedRequest } from "../middleware/auth";
 import { HttpError, ok } from "../middleware/errors";
 import { notifyProgress } from "../services/analysis";
+import { assertAnalysisReady } from "../services/readiness";
 
 const router = Router();
 
@@ -112,6 +113,10 @@ router.post("/:repoId/analyze", async (req: AuthedRequest, res, next) => {
     if (!accessToken) {
       throw new HttpError(400, "VALIDATION_ERROR", "accessToken is required");
     }
+
+    // Same readiness gate as the anonymous flow — degrade honestly (503)
+    // instead of accepting a job we can't run.
+    await assertAnalysisReady();
 
     const repo = await prisma.repository.findFirst({
       where: { id: req.params.repoId, userId: req.userId },

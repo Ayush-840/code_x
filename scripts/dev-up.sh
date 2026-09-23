@@ -6,8 +6,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# 1. Infra
-docker compose -f docker/docker-compose.yml up -d
+# 0. Stop any previous instance of this stack. Repeated dev-up/nohup runs
+# otherwise orphan old tsx children that keep ports/queues/heartbeats alive —
+# the root cause of EADDRINUSE crashes and "two workers, one paused" bugs.
+REPO_ROOT="$(pwd)"
+if pgrep -f "$REPO_ROOT" >/dev/null 2>&1; then
+  echo "[dev-up] stopping previous stack processes..."
+  # -9: tsx watch children ignore SIGTERM (verified), leaving zombies bound
+  # to ports 4000/8100/... which is exactly what this cleanup exists to fix.
+  pkill -9 -f "$REPO_ROOT" || true
+  sleep 2
+fi
+
+# 1. Infra — optional: Docker may be off when Postgres/Redis run natively.
+if docker info >/dev/null 2>&1; then
+  docker compose -f docker/docker-compose.yml up -d
+else
+  echo "[dev-up] docker daemon not running — skipping infra (expect native postgres/redis)"
+fi
 
 # 2. Python venv (created on first run)
 if [ ! -x .venv/bin/uvicorn ]; then
@@ -40,8 +56,10 @@ for name, appdir, module, port in SERVICES:
     print(f"[dev-up] {name} -> :{port}")
 EOF
 
-# 4. Node dev stack (web + api + websocket + worker), detached
-nohup pnpm dev > /tmp/vibe-dev.log 2>&1 &
+# 4. Node dev stack (web + api + websocket + worker), detached. Daemonized
+# (own session) rather than `nohup &` — a background child of this script
+# dies with the terminal otherwise.
+python3 scripts/daemonize.py /tmp/vibe-dev.log pnpm dev
 echo "[dev-up] node stack -> :3000 web, :4000 api, :4001 ws (log: /tmp/vibe-dev.log)"
 
 # 5. Health checks
