@@ -9,6 +9,7 @@
     "dev": "pnpm -r --parallel --filter './apps/*' --filter './packages/*' dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "audit:gate": "bash scripts/audit-gate.sh",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @vibe-coder/database prisma generate",
     "db:migrate": "pnpm --filter @vibe-coder/database prisma migrate dev --name init",
