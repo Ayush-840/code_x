@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 # Default NVIDIA NIM base URL (OpenAI-compatible)
 DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
+# Fallback provider (PRD-I03 resilience): when every NVIDIA key fails or is
+# missing, generation calls route through OpenRouter's OpenAI-compatible API
+# so a free-tier model keeps the pipeline alive instead of degrading to demo.
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+
 
 class KeyRotator:
     """Rotates through a list of API keys, skipping failed ones temporarily.
@@ -32,8 +38,10 @@ class KeyRotator:
         base_url: str = DEFAULT_BASE_URL,
         cooldown_seconds: int = 60,
         single_key_var: str = "OPENAI_API_KEY",
+        openrouter_base_url: str = OPENROUTER_BASE_URL,
     ):
         self.base_url = base_url
+        self.openrouter_base_url = openrouter_base_url
         self.cooldown_seconds = cooldown_seconds
         self._lock = threading.Lock()
         self._failures: dict[str, float] = {}  # key -> last failure timestamp
@@ -143,6 +151,52 @@ class KeyRotator:
             f"All {len(self._keys)} API keys exhausted. Last error: {last_error}"
         )
 
+    # --- Cross-provider fallback (NVIDIA -> OpenRouter) -----------------
+
+    def has_openrouter_fallback(self) -> bool:
+        """True when OPENROUTER_API_KEY is set (config error if unset)."""
+        return bool(os.getenv("OPENROUTER_API_KEY", "").strip())
+
+    def get_openrouter_client(self):
+        """Fresh OpenAI-compatible client pointed at OpenRouter."""
+        from openai import OpenAI
+
+        key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        if not key:
+            raise RuntimeError("OPENROUTER_API_KEY is not set")
+        return OpenAI(api_key=key, base_url=self.openrouter_base_url)
+
+    def execute_with_provider_fallback(self, func, fallback_func=None):
+        """Run func across all primary keys; on total failure try the OpenRouter
+        fallback node once before giving up.
+
+        `fallback_func(client)` receives an OpenRouter client instead of
+        (client, key). Returns (result, provider) where provider is
+        "primary" or "openrouter" so callers can report the model used.
+        """
+        try:
+            return self.execute_with_fallback(func), "primary"
+        except Exception as primary_err:
+            if not self.has_openrouter_fallback():
+                raise
+            logger.warning(
+                f"[key-rotation] primary provider exhausted "
+                f"({primary_err}); trying OpenRouter fallback"
+            )
+            if fallback_func is None:
+                # Caller passed one func for both providers — reuse it.
+                fallback_func = func
+            client = self.get_openrouter_client()
+            try:
+                result = fallback_func(client)
+                logger.info("[key-rotation] OpenRouter fallback succeeded")
+                return result, "openrouter"
+            except Exception as fallback_err:
+                logger.error(
+                    f"[key-rotation] OpenRouter fallback failed: {fallback_err}"
+                )
+                raise primary_err from fallback_err
+
 
 # Singleton rotators (lazy-initialized)
 _generation_rotator: Optional[KeyRotator] = None
@@ -157,6 +211,9 @@ def get_generation_rotator() -> KeyRotator:
             env_var="NVIDIA_API_KEYS",
             base_url=os.getenv("NVIDIA_BASE_URL", DEFAULT_BASE_URL),
             single_key_var="OPENAI_API_KEY",
+            openrouter_base_url=os.getenv(
+                "OPENROUTER_BASE_URL", OPENROUTER_BASE_URL
+            ),
         )
     return _generation_rotator
 

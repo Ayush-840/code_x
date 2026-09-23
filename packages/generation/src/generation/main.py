@@ -13,7 +13,7 @@ for p in [Path(__file__).resolve().parent.parent.parent.parent.parent / ".env", 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from .llm import complete
+from .llm import complete, model_used
 from .architecture import build_architecture
 from .modules import build_module_explanations
 from .questions import build_question_bank
@@ -97,7 +97,7 @@ def chat(req: ChatReq) -> dict:
         "message": answer,
         "citations": citations,
         "isDemo": is_demo,
-        "modelUsed": "gpt-4o-demo" if is_demo else "gpt-4o",
+        "modelUsed": "demo" if is_demo else model_used(),
     }
 
 

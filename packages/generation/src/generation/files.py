@@ -1,9 +1,15 @@
 """Per-file explanation (PRD-G02 / PRD-G06): grounded in one file's actual
 chunks, generated on demand, with 1–3 likely interview questions."""
 
+import os
 import re
 
 from shared.key_rotation import get_generation_rotator
+
+# OpenRouter fallback node (free tier) — same chain as llm.complete().
+OPENROUTER_CHAT_MODEL = os.getenv(
+    "OPENROUTER_CHAT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
+)
 
 
 _SYSTEM_PROMPT = (
@@ -29,14 +35,12 @@ def build_file_explanation(file_path: str, chunks: list[dict]) -> dict:
         "^^^ {filePath}:{startLine}-{endLine} ^^^\n{text}".format(**c) for c in chunks
     )
 
-    # Same demo/live switch as llm.complete(): no keys configured → demo path.
     try:
         rotator = get_generation_rotator()
-        has_keys = rotator.has_keys
+        has_provider = rotator.has_keys or rotator.has_openrouter_fallback()
     except Exception:
-        rotator = None
-        has_keys = False
-    if not has_keys:
+        return _demo_file_explanation(file_path, chunks)
+    if not has_provider:
         return _demo_file_explanation(file_path, chunks)
 
     try:
@@ -58,11 +62,23 @@ def build_file_explanation(file_path: str, chunks: list[dict]) -> dict:
         )
         return resp.choices[0].message.content or ""
 
-    try:
-        text = rotator.execute_with_fallback(_call)
+    def _openrouter_call(client: "OpenAI") -> str:
+        resp = client.chat.completions.create(
+            model=OPENROUTER_CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"File: {file_path}\n\nSource chunks:\n{context}\n\nExplain this file per the system instructions.",
+                },
+            ],
+        )
+        return resp.choices[0].message.content or ""
+
+    def _finalize(text: str) -> dict:
         parsed = _parse_json(text)
         if parsed is None:
-            return _demo_file_explanation(file_path, chunks)
+            raise ValueError("model did not return parseable JSON")
         parsed.setdefault("filePath", file_path)
         # Grounding guarantee: the explanation was generated from these exact
         # chunks, so if the model omits citations we cite those chunks anyway.
@@ -72,7 +88,26 @@ def build_file_explanation(file_path: str, chunks: list[dict]) -> dict:
                 for c in chunks[:5]
             ]
         return parsed
-    except Exception:
+
+    # NVIDIA keys first; if they're exhausted/unavailable and an OpenRouter
+    # fallback key exists, try the free-tier node before degrading to demo.
+    if rotator.has_keys:
+        try:
+            text = rotator.execute_with_fallback(_call)
+            return _finalize(text)
+        except Exception as exc:
+            if not rotator.has_openrouter_fallback():
+                return _demo_file_explanation(file_path, chunks)
+            print(
+                f"[generation] NVIDIA path failed for file-explain ({exc}); "
+                "trying OpenRouter fallback"
+            )
+    try:
+        client = rotator.get_openrouter_client()
+        text = _openrouter_call(client)
+        return _finalize(text)
+    except Exception as exc:
+        print(f"[generation] OpenRouter fallback failed for file-explain: {exc}")
         return _demo_file_explanation(file_path, chunks)
 
 
