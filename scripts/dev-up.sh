@@ -62,11 +62,22 @@ EOF
 python3 scripts/daemonize.py /tmp/vibe-dev.log pnpm dev
 echo "[dev-up] node stack -> :3000 web, :4000 api, :4001 ws (log: /tmp/vibe-dev.log)"
 
-# 5. Health checks
+# 5. Health checks — probe /health on service ports; web (:3000) has no
+# /health route, so the root page is the liveness signal there.
 echo "[dev-up] waiting for services..."
 sleep 8
 for port in 3000 4000 4001 8100 8200 8300 8400; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:$port" 2>/dev/null || echo 000)
+  path="/health"; [ "$port" = "3000" ] && path="/"
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:$port$path" 2>/dev/null || echo 000)
   echo "  port $port -> HTTP $code"
 done
+
+# Guard against port drift: if something else grabbed :3000 before web booted,
+# Next.js silently moves to 3001/3002 and the user stares at a dead localhost.
+web_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:3000" 2>/dev/null || echo 000)
+if [ "$web_code" != "200" ]; then
+  echo "[dev-up] WARNING: web is NOT on :3000 (HTTP $web_code)." 
+  echo "         Check the log for 'Port 3000 is in use' — an orphaned process" 
+  echo "         likely squatted the port (lsof -nP -iTCP:3000)."
+fi
 echo "[dev-up] done. Open http://localhost:3000"
