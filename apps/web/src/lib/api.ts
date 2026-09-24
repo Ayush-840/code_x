@@ -1,16 +1,13 @@
 import { useMemo } from "react";
+import { API_URL, ApiError } from "./publicApi";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Re-exported so consumers (e.g. the login page's OAuth entry point) use this
+// single guarded resolution instead of re-deriving a silent localhost fallback.
+export { API_URL };
 
-export class ApiError extends Error {
-  status: number;
-  code: string;
-  constructor(status: number, code: string, message: string) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
+// Single shared error type across public + authed flows, so `instanceof`
+// checks work regardless of which module threw.
+export { ApiError };
 
 /**
  * Check if the user is authenticated by calling /v1/auth/me.
@@ -28,15 +25,28 @@ export async function isAuthenticated(): Promise<boolean> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}/v1${path}`, {
-    ...init,
-    credentials: "include", // send cookies
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-  });
+// Exported for tests (and any caller needing the raw authed request).
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/v1${path}`, {
+      ...init,
+      credentials: "include", // send cookies
+      headers: {
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+    });
+  } catch {
+    // Same PRD-C04 handling as publicApi.ts: fetch() cannot distinguish
+    // DNS/connection failure from CORS rejection, so surface the attempted
+    // URL to make error reports immediately actionable.
+    throw new ApiError(
+      0,
+      "NETWORK_ERROR",
+      `Could not reach ${API_URL} — check the API is running and CORS is configured for this origin.`
+    );
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = (body as { error?: { code: string; message: string } }).error ?? {

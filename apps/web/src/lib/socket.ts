@@ -3,7 +3,35 @@
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:4001";
+/**
+ * Resolves the WebSocket base URL for the shared socket.
+ *
+ * Same build-time guard as publicApi.ts (PRD-C03): NEXT_PUBLIC_* values are
+ * inlined at build time, so a production build without NEXT_PUBLIC_WS_URL set
+ * would silently ship `http://localhost:4001` into every visitor's bundle.
+ * Fail the build loudly instead; the localhost fallback stays dev-only.
+ *
+ * Callers MUST pass `process.env.NEXT_PUBLIC_WS_URL` / `process.env.NODE_ENV`
+ * as direct static member expressions — Next.js inlines exactly those (and
+ * only those) into client bundles, so routing them through an env object
+ * defeats inlining and silently reintroduces the localhost fallback.
+ */
+export function resolveWsUrl(
+  rawUrl: string | undefined,
+  nodeEnv: string | undefined
+): string {
+  if (!rawUrl && nodeEnv === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_WS_URL is not set. Set it in your Vercel project's environment variables and redeploy."
+    );
+  }
+  return rawUrl ?? "http://localhost:4001";
+}
+
+const WS_URL = resolveWsUrl(
+  process.env.NEXT_PUBLIC_WS_URL,
+  process.env.NODE_ENV
+);
 
 /**
  * Returns the shared socket with a stable identity: `null` until connected,
