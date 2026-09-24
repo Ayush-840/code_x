@@ -41,7 +41,7 @@ Follow **[BUILDING.md](BUILDING.md)** for the step-by-step build of every fronte
 
 ### Railway — `api-worker` service
 
-- [ ] `FRONTEND_URL` = exact Vercel production URL (e.g. `https://code-x.vercel.app`) — `https://`, no trailing slash; CORS does an exact match
+- [ ] `FRONTEND_URL` = **every** visitor-facing Vercel domain, comma-separated (live: `https://codex-ayush-840s-projects.vercel.app,https://codex-tau-rust.vercel.app`) — exact match, `https://`, no trailing slash; a deployed-but-unlisted domain gets silently CORS-blocked
 - [ ] `FRONTEND_PREVIEW_PATTERN` = optional regex for Vercel preview URLs
 - [ ] `API_URL` = this service's **public** URL — must match the GitHub OAuth App callback exactly
 - [ ] `COOKIE_CROSS_SITE` = `true` (required for cross-site cookies from Vercel)

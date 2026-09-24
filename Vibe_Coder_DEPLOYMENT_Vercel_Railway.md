@@ -69,7 +69,7 @@ Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
 | `JWT_SECRET` | 32+ random chars — must match the websocket service |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | From the GitHub OAuth App |
-| `FRONTEND_URL` | Vercel production URL, e.g. `https://code-x.vercel.app` (comma-separate extra origins) |
+| `FRONTEND_URL` | **Every visitor-facing Vercel domain, comma-separated** — live value: `https://codex-ayush-840s-projects.vercel.app,https://codex-tau-rust.vercel.app` (see alias warning below) |
 | `FRONTEND_PREVIEW_PATTERN` | Optional regex for Vercel preview URLs, e.g. `^https://code-x-git-.*-ayush840\.vercel\.app$` |
 | `API_URL` | **Public** URL of this service, e.g. `https://<api-worker>.up.railway.app` — used as the GitHub OAuth `redirect_uri`; must match the OAuth App callback exactly |
 | `COOKIE_CROSS_SITE` | `true` (session cookies become `SameSite=None; Secure` so cross-site requests from Vercel carry them) |
@@ -79,6 +79,16 @@ Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
 | `MOCK_INTERVIEW_SERVICE_URL` | `http://python.railway.internal:8400` |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Optional; billing disabled when unset |
 
+> **CORS alias warning (caused a real incident 2026-09-25):** the Vercel
+> domain visitors actually see is set by the production **alias**
+> (`codex-tau-rust.vercel.app`) and can differ from the project's auto domain
+> (`codex-ayush-840s-projects.vercel.app`). The browser sends `Origin` exactly
+> as shown in the address bar, and CORS matches `FRONTEND_URL` entries exactly —
+> a domain that is deployed but not listed gets silently CORS-blocked (the
+> preflight responds without `access-control-allow-origin`, and `fetch()` just
+> reports a generic network error). Whenever a production alias changes, update
+> `FRONTEND_URL` on **both** `api-worker` and `websocket` and let them redeploy.
+
 ## Environment variables — Railway `websocket` service
 
 | Variable | Value |
@@ -87,7 +97,7 @@ Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
 | `PORT` | `4001` |
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` (Socket.IO redis adapter) |
 | `JWT_SECRET` | **Same value as api-worker** (token verification) |
-| `FRONTEND_URL` / `FRONTEND_PREVIEW_PATTERN` | Same as api-worker |
+| `FRONTEND_URL` / `FRONTEND_PREVIEW_PATTERN` | Same as api-worker — must include **every** production alias, not just the auto domain |
 | `GENERATION_SERVICE_URL` | `http://python.railway.internal:8300` (chat handler) |
 | `MOCK_INTERVIEW_SERVICE_URL` | `http://python.railway.internal:8400` |
 
@@ -165,3 +175,6 @@ The GitHub OAuth App callback URL must be set to
 - [ ] Redeploy `python` → previously indexed repo search results still return hits (volume persisted)
 - [ ] api-worker / websocket reach `python.railway.internal` on 8100–8400 (health/readiness in logs)
 - [ ] Zero CORS errors in the browser console (production + preview origins)
+- [ ] CORS preflight from **every** production domain echoes it back:
+      `curl -s -i -X OPTIONS https://<api-worker>.up.railway.app/v1/public/analyze -H "Origin: https://<domain>" -H "Access-Control-Request-Method: POST"`
+      → `204` with `access-control-allow-origin: https://<domain>` (repeat for `codex-ayush-840s-projects.vercel.app`, `codex-tau-rust.vercel.app`, and the websocket service)
