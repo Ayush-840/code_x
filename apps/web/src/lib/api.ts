@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiError extends Error {
@@ -67,12 +69,19 @@ export async function logout(): Promise<void> {
 }
 
 export function useAuthedFetch() {
-  return {
-    get: <T,>(path: string) => request<T>(path),
-    post: <T,>(path: string, body?: unknown) =>
-      request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
-    patch: <T,>(path: string, body?: unknown) =>
-      request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
-    del: <T,>(path: string) => request<T>(path, { method: "DELETE" }),
-  };
+  // Memoized so the returned client keeps a stable identity across renders
+  // (TRD-F02): effects and memoized callbacks that depend on it must not
+  // re-fire on every parent render — that re-firing was the File Graph
+  // flicker amplifier.
+  return useMemo(
+    () => ({
+      get: <T,>(path: string) => request<T>(path),
+      post: <T,>(path: string, body?: unknown) =>
+        request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
+      patch: <T,>(path: string, body?: unknown) =>
+        request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
+      del: <T,>(path: string) => request<T>(path, { method: "DELETE" }),
+    }),
+    []
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
@@ -48,7 +48,8 @@ export default function PublicAnalysisPage() {
   const params = useParams();
   const id = params.id as string;
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);    const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "deployment">("modules");
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "deployment">("modules");
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +74,27 @@ export default function PublicAnalysisPage() {
       clearTimeout(timer);
     };
   }, [id]);
+
+  // Hooks live above the early returns below (Rules of Hooks): the old file
+  // declared its useCallbacks after them, so an error/FAILED render changed
+  // the component's hook count.
+  // Key the tree fetcher on the artifact reference, not the whole result
+  // object (TRD-F01): the 3s status poll replaces `result` on every cycle
+  // while PENDING, and keying on it handed FileGraphTab a new prop identity
+  // each poll — the anonymous-page half of the flicker loop.
+  const fileTreeArtifact = useMemo(
+    () => result?.artifacts.find((a) => a.artifactType === "file-tree"),
+    [result]
+  );
+  const fetchTree = useCallback(async () => {
+    if (!fileTreeArtifact) throw new Error("No file tree for this analysis");
+    return fileTreeArtifact.content as unknown as FileTreeNode;
+  }, [fileTreeArtifact]);
+
+  const explainFile = useCallback(
+    (path: string) => publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path }),
+    [id]
+  );
 
   if (error) {
     return (
@@ -152,20 +174,6 @@ export default function PublicAnalysisPage() {
       alert(e instanceof ApiError ? e.message : "Could not claim analysis. Are you signed in?");
     }
   };
-
-  const fetchTree = useCallback(async () => {
-    const fileTreeArtifact = result?.artifacts.find(
-      (a) => a.artifactType === "file-tree"
-    );
-    if (!fileTreeArtifact) throw new Error("No file tree for this analysis");
-    return fileTreeArtifact.content as unknown as FileTreeNode;
-  }, [result]);
-
-  const explainFile = useCallback(
-    (path: string) =>
-      publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path }),
-    [id]
-  );
 
   return (
     <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">

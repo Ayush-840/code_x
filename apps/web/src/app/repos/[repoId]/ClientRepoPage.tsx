@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthRedirect } from "@/components/auth";
 import { useAuthedFetch } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
@@ -66,18 +66,41 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
     api.get<Repo>(`/repos/${repoId}`).then(setRepo).catch(() => setRepo(null));
   }, [api, repoId, authStatus]);
 
+  // Stable fetcher identities for child tabs (TRD-F01): inline arrows here
+  // used to hand FileGraphTab a new prop identity on every render, re-firing
+  // its load effect and flipping the whole panel to the spinner on every
+  // analysis:progress event — the File Graph flicker loop.
+  const fetchTree = useCallback(async () => {
+    const art = await api.get<{ content: FileTreeNode }>(`/repos/${repoId}/file-tree`);
+    return art.content ?? (art as unknown as FileTreeNode);
+  }, [api, repoId]);
+
+  const explainFile = useCallback(
+    (path: string) => api.post<FileExplanation>(`/repos/${repoId}/files/explain`, { path }),
+    [api, repoId]
+  );
+
   useEffect(() => {
     if (!socket) return;
     socket.emit("repo:join", { repoId });
-    socket.on("analysis:progress", (p: { repoId: string; stage: string; progress: number; message: string }) => {
-      if (p.repoId === repoId) {
-        setAnalysisProgress(p);
-        if (p.progress === 100) {
-          api.get<Repo>(`/repos/${repoId}`).then(setRepo).catch(() => {});
-        }
+    // Throttled (TRD-F03): progress events stream frequently during analysis;
+    // updating state on every one re-rendered this whole page — and with it,
+    // every tab. Cap rendered updates at ~4/sec, but always pass 100% through
+    // so completion is never delayed by the throttle window.
+    let lastRender = 0;
+    const onProgress = (p: { repoId: string; stage: string; progress: number; message: string }) => {
+      if (p.repoId !== repoId) return;
+      const now = Date.now();
+      if (p.progress === 100 || now - lastRender >= 250) {
+        lastRender = now;
+        setAnalysisProgress({ stage: p.stage, progress: p.progress, message: p.message });
       }
-    });
-    return () => { socket.off("analysis:progress"); };
+      if (p.progress === 100) {
+        api.get<Repo>(`/repos/${repoId}`).then(setRepo).catch(() => {});
+      }
+    };
+    socket.on("analysis:progress", onProgress);
+    return () => { socket.off("analysis:progress", onProgress); };
   }, [socket, repoId, api]);
 
   if (authStatus !== "authed") {
@@ -152,15 +175,7 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
         {/* Tab content */}
         {activeTab === "architecture" && <ArchitectureTab repoId={repoId} />}
         {activeTab === "filegraph" && (
-          <FileGraphTab
-            fetchTree={async () => {
-              const art = await api.get<{ content: FileTreeNode }>(`/repos/${repoId}/file-tree`);
-              return art.content ?? (art as unknown as FileTreeNode);
-            }}
-            explainFile={(path) =>
-              api.post<FileExplanation>(`/repos/${repoId}/files/explain`, { path })
-            }
-          />
+          <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} />
         )}
         {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
         {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}

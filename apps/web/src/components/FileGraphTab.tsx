@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Folder, FileCode, ArrowRight, ExternalLink, ChevronRight, ChevronDown, Filter, Loader2 } from "lucide-react";
 import type { FileTreeNode } from "@/components/FileGraph";
 
@@ -75,18 +75,37 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [explanation, setExplanation] = useState<FileExplanation | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "explained" | "unexplained">("all");
   const [dirFilter, setDirFilter] = useState<string>("all");
+  // Mirrors `tree` for use inside effects without re-triggering them; also
+  // distinguishes first load (spinner OK) from background refresh (must stay
+  // silent) — the heart of the flicker fix (TRD-F01).
+  const treeRef = useRef<FileTreeNode | null>(null);
+  // Per-path explanation cache (PRD-F07): re-selecting a file is instant and
+  // re-renders with new prop identities never re-request the same file.
+  const explanationCache = useRef<Map<string, FileExplanation>>(new Map());
 
-  // Load tree on mount
+  // Load tree — first load shows the full-panel spinner; any later run of this
+  // effect (a genuinely changed fetcher identity) refreshes silently in the
+  // background and never tears down rendered content (PRD-F01/F04).
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const isRefetch = treeRef.current !== null;
+    if (isRefetch) {
+      setError(null);
+    } else {
+      setLoading(true);
+    }
     fetchTree()
       .then((t) => {
-        if (!cancelled) {
-          setTree(t);
-          // Auto-expand root and small top-level dirs
+        if (cancelled) return;
+        treeRef.current = t;
+        setTree(t);
+        setError(null);
+        // Auto-expand root and small top-level dirs (only on first load so a
+        // silent refresh does not yank the user's collapse state).
+        if (!isRefetch) {
           const initialExpanded = new Set<string>();
           initialExpanded.add(`/${t.name}`);
           for (const child of t.children) {
@@ -97,22 +116,47 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
           setExpanded(initialExpanded);
         }
       })
-      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Failed to load file tree"))
-      .finally(() => !cancelled && setLoading(false));
+      .catch((e) => {
+        if (cancelled) return;
+        // First load: full-panel error (nothing rendered yet). Background
+        // refresh: inline banner — the cached tree stays mounted.
+        setError(e instanceof Error ? e.message : "Failed to load file tree");
+      })
+      .finally(() => {
+        if (!cancelled && !isRefetch) setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [fetchTree]);
 
-  // Fetch explanation when file selected
+  // Fetch explanation when a file is selected — cache-first, request-guarded,
+  // and errors surface inline with a working Retry (PRD-F07/F08).
   useEffect(() => {
     if (!selectedPath) {
       setExplanation(null);
+      setExplainError(null);
+      return;
+    }
+    const cached = explanationCache.current.get(selectedPath);
+    if (cached) {
+      setExplanation(cached);
+      setExplainError(null);
+      setExplainLoading(false);
       return;
     }
     let cancelled = false;
     setExplainLoading(true);
+    setExplainError(null);
     explainFile(selectedPath)
-      .then((exp) => !cancelled && setExplanation(exp))
-      .catch(() => !cancelled && setExplanation(null))
+      .then((exp) => {
+        if (cancelled) return;
+        explanationCache.current.set(selectedPath, exp);
+        setExplanation(exp);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setExplanation(null);
+        setExplainError(e instanceof Error ? e.message : "Failed to explain file");
+      })
       .finally(() => !cancelled && setExplainLoading(false));
     return () => { cancelled = true; };
   }, [selectedPath, explainFile]);
@@ -150,6 +194,48 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
     setSelectedPath(path);
   }, []);
 
+  // Guarded retry paths (PRD-F08): same loading/error handling as the
+  // effects, no unhandled promise rejections.
+  const retryRefresh = useCallback(() => {
+    let cancelled = false;
+    setError(null);
+    fetchTree()
+      .then((t) => {
+        if (cancelled) return;
+        treeRef.current = t;
+        setTree(t);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load file tree");
+      });
+    return () => { cancelled = true; };
+  }, [fetchTree]);
+
+  const retryExplain = useCallback(
+    (p: string) => {
+      let cancelled = false;
+      setExplainLoading(true);
+      setExplainError(null);
+      explainFile(p)
+        .then((exp) => {
+          if (cancelled) return;
+          explanationCache.current.set(p, exp);
+          setExplanation(exp);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setExplanation(null);
+            setExplainError(e instanceof Error ? e.message : "Failed to explain file");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setExplainLoading(false);
+        });
+      return () => { cancelled = true; };
+    },
+    [explainFile]
+  );
+
   if (loading) {
     return (
       <div className="panel flex items-center justify-center h-[600px]">
@@ -161,7 +247,10 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
     );
   }
 
-  if (error) {
+  // Full-panel error screen only when nothing has loaded yet (first load).
+  // With a cached tree present, failures surface as an inline banner below
+  // (PRD-F04) — tearing down rendered content was the flicker bug.
+  if (error && !tree) {
     return (
       <div className="panel text-center">
         <div className="text-4xl mb-2">🗂️</div>
@@ -187,6 +276,20 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
 
   return (
     <div className="panel grid grid-cols-1 md:grid-cols-12 gap-6 p-4 sm:p-6 min-h-[600px]">
+      {/* Inline refresh-error banner (PRD-F04): a failed background refresh
+          keeps the cached tree rendered — never the full-panel error screen. */}
+      {error && (
+        <div className="md:col-span-12 flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-red-400/40 bg-red-400/10 text-xs font-mono">
+          <span className="text-red-400">Refresh failed: {error}</span>
+          <button
+            onClick={() => retryRefresh()}
+            className="btn px-2 py-1 text-[11px] bg-lab-blueDim text-lab-blue border border-lab-blue/30 hover:bg-lab-blue/20"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Left: File List Sidebar - 4 cols */}
       <div className="md:col-span-4 border-r border-lab-border pr-4 space-y-3 font-mono text-xs overflow-y-auto">
         {/* Header */}
@@ -417,13 +520,21 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
                   </div>
                 )}
               </div>
+            ) : explainError ? (
+              <div className="text-center py-12 text-lab-textMuted">
+                <p className="text-sm text-red-400">{explainError}</p>
+                <button
+                  onClick={() => selectedPath && retryExplain(selectedPath)}
+                  className="mt-4 btn px-3 py-1.5 text-sm bg-lab-blueDim text-lab-blue border border-lab-blue/30 hover:bg-lab-blue/20"
+                >
+                  Retry
+                </button>
+              </div>
             ) : (
               <div className="text-center py-12 text-lab-textMuted">
                 <p className="text-sm">No explanation available for this file</p>
                 <button
-                  onClick={() => {
-                    if (selectedPath) explainFile(selectedPath).then(setExplanation);
-                  }}
+                  onClick={() => selectedPath && retryExplain(selectedPath)}
                   className="mt-4 btn px-3 py-1.5 text-sm bg-lab-blueDim text-lab-blue border border-lab-blue/30 hover:bg-lab-blue/20"
                 >
                   Retry
