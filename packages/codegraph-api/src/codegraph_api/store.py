@@ -93,7 +93,10 @@ def _load_from_disk(repo_id: str) -> tuple[GraphStore, GraphData] | None:
         store, graph = _deserialize(data)
         _paths[repo_id] = data.get("repo_path", "")
         with _lock:
-            _graphs[repo_id] = store
+            # Cache the (store, graph) pair — same shape load_graph returns.
+            # A bare store here made the SECOND load_graph after a restart
+            # blow up unpacking a GraphStore as a tuple.
+            _graphs[repo_id] = (store, graph)
             _graphs.move_to_end(repo_id)
             while len(_graphs) > _MAX_IN_MEMORY:
                 _graphs.popitem(last=False)

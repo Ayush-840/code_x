@@ -39,9 +39,11 @@ ENV RETRIEVAL_STORAGE_DIR=/data/retrieval
 RUN mkdir -p /data/retrieval
 
 # Persisted codegraph graphs (repo-keyed JSON, same class of state as the
-# retrieval index — must survive restarts).
-ENV CODEGRAPH_STORAGE_DIR=/data/codegraph
-RUN mkdir -p /data/codegraph
+# retrieval index — must survive restarts). Railway allows one volume per
+# service, so codegraph shares the python-volume mount (/data/retrieval)
+# under its own subdir — the same pattern Redis uses for --dir.
+ENV CODEGRAPH_STORAGE_DIR=/data/retrieval/codegraph
+RUN mkdir -p /data/retrieval/codegraph
 
 ENV PYTHONPATH=/app/packages/shared_python/src:/app/packages/analysis/src:/app/packages/retrieval/src:/app/packages/generation/src:/app/packages/mock-interview/src:/app/packages/codegraph-api/src:/app/packages/codegraph-parser/src
 
