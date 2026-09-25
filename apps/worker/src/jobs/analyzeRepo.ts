@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { simpleGit } from "simple-git";
 import { PrismaClient } from "@vibe-coder/database";
+import { createArtifact } from "@vibe-coder/database/artifacts";
 import { Redis } from "ioredis";
 
 const prisma = new PrismaClient();
@@ -219,6 +220,7 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       symbols: unknown[];
       chunks: { text: string; filePath: string; startLine: number; endLine: number }[];
       fileTree?: FileTreeNode;
+      fileEdges?: { from: string; to: string; type: string }[];
     };
     if (!parseRes.ok) throw new Error("analysis service failed");
 
@@ -277,27 +279,25 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
     }[];
     if (!artRes.ok) throw new Error("generation service failed");
 
+    // Appends version = max(existing)+1: a plain create() with the default
+    // version=1 collides with the previous run's rows (P2002) on re-analysis.
     for (const artifact of artifacts) {
-      await prisma.artifact.create({
-        data: {
-          repoId,
-          jobId,
-          artifactType: artifact.type,
-          content: artifact.content as import("@vibe-coder/database").Prisma.InputJsonValue,
-        },
+      await createArtifact(prisma, {
+        repoId,
+        jobId,
+        artifactType: artifact.type,
+        content: artifact.content,
       });
     }
 
     // 4b. SAVE DEPLOYMENT ARTIFACT (PRD-A05) — always written: an empty map
     // is the explicit "no deployment config found" state (rendered as an
     // honest empty state in the tab), never a hallucinated guess.
-    await prisma.artifact.create({
-      data: {
-        repoId,
-        jobId,
-        artifactType: "deployment",
-        content: (deploymentInfo ?? {}) as import("@vibe-coder/database").Prisma.InputJsonValue,
-      },
+    await createArtifact(prisma, {
+      repoId,
+      jobId,
+      artifactType: "deployment",
+      content: deploymentInfo ?? {},
     });
 
     // 4c. SAVE FILE-TREE ARTIFACT (PRD-G01) — the real per-file structure from
@@ -305,15 +305,23 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
     // waiting on (or paying for) any LLM call. Always written; an empty tree
     // (root with no children) is the honest "nothing parseable" state.
     if (parsed.fileTree) {
-      await prisma.artifact.create({
-        data: {
-          repoId,
-          jobId,
-          artifactType: "file-tree",
-          content: parsed.fileTree as unknown as import("@vibe-coder/database").Prisma.InputJsonValue,
-        },
+      await createArtifact(prisma, {
+        repoId,
+        jobId,
+        artifactType: "file-tree",
+        content: parsed.fileTree,
       });
     }
+
+    // 4d. SAVE FILE-EDGES ARTIFACT — import/require edges between repo files,
+    // the data behind the connected-files graph. Always written; an empty
+    // edges list is the honest "no imports resolved" state.
+    await createArtifact(prisma, {
+      repoId,
+      jobId,
+      artifactType: "file-edges",
+      content: { edges: parsed.fileEdges ?? [] },
+    });
 
     // 5. DONE
     await progress(jobId, "DONE", 100, "Analysis complete");

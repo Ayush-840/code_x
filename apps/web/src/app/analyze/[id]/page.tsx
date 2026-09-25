@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
+import type { FileEdge } from "@/lib/fileConnections";
 
 interface FileExplanation {
   summary?: string;
@@ -95,6 +96,17 @@ export default function PublicAnalysisPage() {
     (path: string) => publicPost<FileExplanation>(`/v1/public/${id}/files/explain`, { path }),
     [id]
   );
+
+  // Import edges artifact — keyed on the artifact reference (same TRD-F01
+  // reasoning as the tree fetcher above); absent for pre-feature analyses.
+  const fileEdgesArtifact = useMemo(
+    () => result?.artifacts.find((a) => a.artifactType === "file-edges"),
+    [result]
+  );
+  const fetchFileEdges = useCallback(async (): Promise<FileEdge[]> => {
+    const content = fileEdgesArtifact?.content as { edges?: FileEdge[] } | undefined;
+    return content?.edges ?? [];
+  }, [fileEdgesArtifact]);
 
   if (error) {
     return (
@@ -268,6 +280,7 @@ export default function PublicAnalysisPage() {
           <FileGraphTab
             fetchTree={fetchTree}
             explainFile={explainFile}
+            fetchFileEdges={fetchFileEdges}
           />
         )}
 

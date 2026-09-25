@@ -71,7 +71,9 @@ export function RepoConnectForm({
       </div>
       {error ? <p style={styles.error}>{error}</p> : null}
       <p style={styles.hint}>
-        Use a token with repo scope. In demo mode any token format works.
+        Use a personal access token with `repo` scope (GitHub → Settings →
+        Developer settings → Personal access tokens). It is only used to verify
+        the repository and clone it for analysis.
       </p>
     </div>
   );

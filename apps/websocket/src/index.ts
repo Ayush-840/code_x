@@ -20,7 +20,9 @@ const PREVIEW_PATTERN = process.env.FRONTEND_PREVIEW_PATTERN
   ? new RegExp(process.env.FRONTEND_PREVIEW_PATTERN)
   : null;
 
-const allowedOrigins = FRONTEND_URL.split(",");
+const allowedOrigins = FRONTEND_URL.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const pubClient = new Redis(REDIS_URL);
 const subClient = pubClient.duplicate();

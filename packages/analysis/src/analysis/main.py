@@ -7,6 +7,7 @@ from typing import Any
 
 from .parser import parse_repo
 from .chunker import chunk_source
+from .imports import extract_file_edges
 
 app = FastAPI(title="Vibe Coder Analysis Service")
 
@@ -105,6 +106,10 @@ def analyze(req: AnalyzeRequest) -> dict:
     try:
         modules, symbols = parse_repo(repo_path)
         repo_root = Path(repo_path)
+        # Import edges between repo files — the data behind the connected-files
+        # graph (selected file -> its imports / importers).
+        rel_files = [f for mod in modules for f in mod["files"]]
+        file_edges = extract_file_edges(repo_root, rel_files)
         chunks: list[Chunk] = []
         for mod in modules:
             for rel_path in mod["files"]:
@@ -128,6 +133,7 @@ def analyze(req: AnalyzeRequest) -> dict:
             "symbols": symbols,
             "chunks": [c.model_dump() for c in chunks],
             "fileTree": build_file_tree(modules),
+            "fileEdges": file_edges,
         }
     finally:
         if tmp_dir:

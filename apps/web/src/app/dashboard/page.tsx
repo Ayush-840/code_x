@@ -84,10 +84,16 @@ export default function DashboardPage() {
 
   const onConnected = useCallback((repo: Repository) => {
     setRepos((prev) => [repo, ...prev]);
-  }, []);
+    // Quota is decremented server-side on connect (and restored on delete),
+    // so refresh the usage tiles — otherwise the "N remaining" gate stays
+    // stale and blocks (or allows) the next connect incorrectly.
+    void load();
+  }, [load]);
 
   const analyze = useCallback(async (repoId: string, accessToken: string) => {
-    if (!socket) return;
+    // Queue the analysis regardless of socket state — the old `if (!socket)
+    // return` silently did nothing while the WS was connecting, so clicking
+    // Analyze appeared broken. The socket is only needed for live progress.
     const res = await api.post<{ jobId: string; repoId: string }>(
       `/repos/${repoId}/analyze`,
       { accessToken }
@@ -96,7 +102,7 @@ export default function DashboardPage() {
       ...prev,
       [res.repoId]: { stage: "QUEUED", progress: 0, message: "Queued" },
     }));
-    socket.emit("repo:join", { repoId, jobId: res.jobId });
+    socket?.emit("repo:join", { repoId, jobId: res.jobId });
   }, [api, socket]);
 
   const logout = () => { apiLogout(); };
@@ -129,11 +135,7 @@ export default function DashboardPage() {
 
       <div className="page">
         {/* Error */}
-        {error && (
-          <div className="error-banner">
-            ⚠ {error} — ensure the API server is running on port 4000.
-          </div>
-        )}
+        {error && <div className="error-banner">⚠ {error}</div>}
 
         {/* Usage tiles */}
         <div style={S.usageGrid}>
@@ -210,7 +212,15 @@ function RepoCard({ repo, progress, onAnalyze }: { repo: Repository; progress?: 
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
-    try { await onAnalyze(token); } finally { setAnalyzing(false); }
+    try {
+      await onAnalyze(token);
+    } catch (e) {
+      // Surface API errors (bad PAT, quota, analysis already running) —
+      // this used to be an unhandled rejection with no user feedback.
+      alert((e as Error).message || "Could not start analysis");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   return (

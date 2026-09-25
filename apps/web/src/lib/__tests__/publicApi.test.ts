@@ -86,3 +86,55 @@ describe("publicPost network failure (PRD-C04)", () => {
     expect(apiErr.message).toContain("CORS");
   });
 });
+
+describe("authed request auto-refresh on TOKEN_EXPIRED", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("refreshes once and replays the original request (sessions survive 15-min expiry)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json(
+          { error: { code: "TOKEN_EXPIRED", message: "JWT has expired; refresh required" } },
+          401
+        )
+      )
+      .mockResolvedValueOnce(json({ ok: true, data: { success: true } }, 200))
+      .mockResolvedValueOnce(json({ ok: true, data: { repos: [] } }, 200));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const data = await authedRequest<{ repos: string[] }>("/repos");
+
+    expect(data).toEqual({ repos: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // 2nd call is the refresh rotation, 3rd is the replayed original.
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/v1/auth/refresh");
+    expect(String(fetchMock.mock.calls[2][0])).toContain("/v1/repos");
+  });
+
+  it("gives up after one refresh attempt (no retry loop when refresh fails)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ error: { code: "TOKEN_EXPIRED", message: "expired" } }, 401)
+      )
+      .mockResolvedValueOnce(
+        json({ error: { code: "UNAUTHORIZED", message: "Invalid refresh token" } }, 401)
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const err = await authedRequest("/repos").catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("TOKEN_EXPIRED");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

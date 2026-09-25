@@ -1,4 +1,5 @@
 import { PrismaClient } from "@vibe-coder/database";
+import { createArtifact } from "@vibe-coder/database/artifacts";
 
 const prisma = new PrismaClient();
 
@@ -22,13 +23,11 @@ export async function generateArtifacts(
   }
   const artifacts = (await resp.json()) as { type: string; content: Record<string, unknown> }[];
   for (const artifact of artifacts) {
-    await prisma.artifact.create({
-      data: {
-        repoId,
-        jobId,
-        artifactType: artifact.type,
-        content: artifact.content as import("@vibe-coder/database").Prisma.InputJsonValue,
-      },
+    await createArtifact(prisma, {
+      repoId,
+      jobId,
+      artifactType: artifact.type,
+      content: artifact.content,
     });
   }
   await prisma.$disconnect();

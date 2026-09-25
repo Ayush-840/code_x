@@ -25,8 +25,25 @@ export async function isAuthenticated(): Promise<boolean> {
   }
 }
 
+// Deduped refresh: the refresh endpoint revokes the old token on every use,
+// so concurrent 401s must share one rotation or the losers fail and log the
+// user out. One in-flight promise, reused until it settles.
+let inflightRefresh: Promise<boolean> | null = null;
+function refreshOnce(): Promise<boolean> {
+  if (!inflightRefresh) {
+    inflightRefresh = refreshTokens().finally(() => {
+      inflightRefresh = null;
+    });
+  }
+  return inflightRefresh;
+}
+
 // Exported for tests (and any caller needing the raw authed request).
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  opts: { retried?: boolean } = {}
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}/v1${path}`, {
@@ -53,6 +70,16 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       code: "UNKNOWN",
       message: "Request failed",
     };
+    // Auto-recover expired access tokens: sessions last 15 minutes but the
+    // 30-day refresh cookie was never used, so every flow (repo connect,
+    // analyze) silently started failing with TOKEN_EXPIRED after 15 min idle
+    // and useAuthRedirect bounced the user to /login. Refresh once and replay
+    // the original request; refreshTokens() never throws, so no recursion.
+    if (res.status === 401 && err.code === "TOKEN_EXPIRED" && !opts.retried) {
+      if (await refreshOnce()) {
+        return request<T>(path, init, { retried: true });
+      }
+    }
     throw new ApiError(res.status, err.code, err.message);
   }
   return (body as { data: T }).data;

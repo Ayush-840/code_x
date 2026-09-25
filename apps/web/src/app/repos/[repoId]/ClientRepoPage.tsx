@@ -12,6 +12,7 @@ import { MockInterviewTab } from "@/components/tabs/MockInterviewTab";
 import { DeploymentTab } from "@/components/tabs/DeploymentTab";
 import { FileGraphTab } from "@/components/FileGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
+import type { FileEdge } from "@/lib/fileConnections";
 import { useRouter } from "next/navigation";
 
 interface FileExplanation {
@@ -79,6 +80,17 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
     (path: string) => api.post<FileExplanation>(`/repos/${repoId}/files/explain`, { path }),
     [api, repoId]
   );
+
+  // Import edges for the connected-files graph — 404 is expected until the
+  // next analysis writes the file-edges artifact, so resolve to [].
+  const fetchFileEdges = useCallback(async (): Promise<FileEdge[]> => {
+    try {
+      const art = await api.get<{ content?: { edges?: FileEdge[] } }>(`/repos/${repoId}/file-edges`);
+      return art.content?.edges ?? [];
+    } catch {
+      return [];
+    }
+  }, [api, repoId]);
 
   useEffect(() => {
     if (!socket) return;
@@ -175,7 +187,7 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
         {/* Tab content */}
         {activeTab === "architecture" && <ArchitectureTab repoId={repoId} />}
         {activeTab === "filegraph" && (
-          <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} />
+          <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} fetchFileEdges={fetchFileEdges} />
         )}
         {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
         {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}

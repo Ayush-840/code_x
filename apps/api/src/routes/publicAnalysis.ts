@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createArtifact } from "@vibe-coder/database/artifacts";
 import { Octokit } from "octokit";
 import { prisma } from "../db";
 import { analysisQueue } from "../redis";
@@ -287,12 +288,10 @@ router.post(
         clearTimeout(timer);
       }
 
-      await prisma.artifact.create({
-        data: {
-          repoId: pa.repoId,
-          artifactType,
-          content: explanation as unknown as import("@vibe-coder/database").Prisma.InputJsonValue,
-        },
+      await createArtifact(prisma, {
+        repoId: pa.repoId,
+        artifactType,
+        content: explanation,
       });
       ok(res, { ...explanation, cached: false });
     } catch (err) {

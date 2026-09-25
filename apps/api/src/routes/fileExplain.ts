@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createArtifact } from "@vibe-coder/database/artifacts";
 import { prisma } from "../db";
 import type { AuthedRequest } from "../middleware/auth";
 import { HttpError, ok } from "../middleware/errors";
@@ -99,12 +100,10 @@ router.post(
       }
 
       const explanation = await generateFileExplanation(repo.id, path);
-      await prisma.artifact.create({
-        data: {
-          repoId: repo.id,
-          artifactType,
-          content: explanation as unknown as import("@vibe-coder/database").Prisma.InputJsonValue,
-        },
+      await createArtifact(prisma, {
+        repoId: repo.id,
+        artifactType,
+        content: explanation,
       });
       ok(res, { ...explanation, cached: false });
     } catch (err) {

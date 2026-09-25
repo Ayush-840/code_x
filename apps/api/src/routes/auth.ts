@@ -83,19 +83,44 @@ router.get("/github", (_req, res) => {
   const nonce = randomBytes(16).toString("hex");
   const state = signOAuthState(nonce);
   const { cookieSecure, cookieSameSite } = config;
-  res.cookie("oauth_state", state, { httpOnly: true, secure: cookieSecure, sameSite: cookieSameSite });
+  res.cookie("oauth_state", state, {
+    httpOnly: true,
+    secure: cookieSecure,
+    sameSite: cookieSameSite,
+    // Explicit path so set and clear target the same cookie, and so the
+    // cookie is sent to the callback below (it lives under /v1/auth).
+    path: "/v1/auth",
+  });
   const params = new URLSearchParams({
     client_id: config.githubClientId,
     scope: "repo,user:email",
     state,
   });
+  // Only sent when the deployment declares API_URL (which must match the
+  // OAuth App's registered callback); see config.githubRedirectUri.
+  if (config.githubRedirectUri) params.set("redirect_uri", config.githubRedirectUri);
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
 
 // GET /v1/auth/github/callback — exchange code for tokens, set cookies
 router.get("/github/callback", async (req, res, next) => {
   try {
-    const { code, state } = req.query as { code?: string; state?: string };
+    const { code, state, error } = req.query as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
+    // A user who clicks "Cancel" on GitHub arrives as ?error=access_denied
+    // with no code. Report that as what it is — not "state mismatch".
+    if (error && !code) {
+      throw new HttpError(
+        400,
+        "OAUTH_DENIED",
+        error === "access_denied"
+          ? "GitHub sign-in was cancelled — no access was granted."
+          : "GitHub sign-in failed. Please try again."
+      );
+    }
     const cookieState = req.cookies?.oauth_state;
     // The signed state must always be valid. When the browser kept the
     // oauth_state cookie, it must also match — a mismatch means someone
@@ -115,6 +140,8 @@ router.get("/github/callback", async (req, res, next) => {
         client_id: config.githubClientId,
         client_secret: config.githubClientSecret,
         code,
+        // Must be present here whenever it was sent in the authorize step.
+        ...(config.githubRedirectUri ? { redirect_uri: config.githubRedirectUri } : {}),
       }),
     });
     const { access_token } = (await tokenResp.json()) as { access_token?: string };
@@ -165,12 +192,13 @@ router.get("/github/callback", async (req, res, next) => {
 
     // Set httpOnly cookies and redirect
     setAuthCookies(res, accessToken, rawRefresh);
+    res.clearCookie("oauth_state", { path: "/v1/auth" });
     res.redirect(`${config.frontendUrl}/login?authenticated=1`);
   } catch (err) {
     // The user arrived here via a top-level browser navigation from GitHub, so
     // send them back to a recoverable UI state instead of dumping raw JSON.
     // The login page already renders ?error= messages.
-    res.clearCookie("oauth_state", { path: "/" });
+    res.clearCookie("oauth_state", { path: "/v1/auth" });
     const message =
       err instanceof HttpError ? err.message : "Sign-in failed. Please try again.";
     res.redirect(`${config.frontendUrl}/login?error=${encodeURIComponent(message)}`);

@@ -28,10 +28,32 @@ router.post("/connect", async (req: AuthedRequest, res, next) => {
     }
     const { owner, repo } = parseRepoUrl(repoUrl);
 
+    // Quota fail-fast (was UI-only): check before any GitHub call so an
+    // over-quota user gets an instant 403 instead of a slow GitHub round-trip.
+    // The old flow never decremented reposRemaining — and delete never
+    // restored it — so the dashboard showed "Repo limit reached" forever
+    // while the API happily accepted unlimited connects.
+    const quotaMessage = "Repo limit reached for your plan. Delete a repo to free up quota.";
+    let subscription = await prisma.subscription.findFirst({
+      where: { userId: req.userId! },
+    });
+    if (!subscription) {
+      subscription = await prisma.subscription.create({ data: { userId: req.userId! } });
+    }
+    if (subscription.reposRemaining <= 0) {
+      throw new HttpError(403, "QUOTA_EXCEEDED", quotaMessage);
+    }
+
     const octokit = new Octokit({ auth: accessToken });
     let gh;
+    let primaryLang: string | null = null;
     try {
       gh = await octokit.rest.repos.get({ owner, repo });
+      // Same try/catch as repos.get: a rate-limited/scope-denied languages
+      // call used to escape as a raw 500 instead of a mapped GitHub error.
+      const languages = await octokit.rest.repos.listLanguages({ owner, repo });
+      primaryLang =
+        Object.entries(languages.data).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
     } catch (ghErr: any) {
       const status = ghErr?.status ?? ghErr?.response?.status;
       if (status === 401) {
@@ -40,11 +62,19 @@ router.post("/connect", async (req: AuthedRequest, res, next) => {
       if (status === 404) {
         throw new HttpError(404, "REPO_NOT_FOUND", `Repository ${owner}/${repo} not found. Check the URL and token permissions.`);
       }
+      if (status === 403 || status === 429) {
+        // 403 from GitHub covers both rate limiting and scope/SAML denials —
+        // "Resource not accessible by personal access token" used to surface
+        // as a generic 502 that looked like an outage.
+        const remaining = ghErr?.response?.headers?.["x-ratelimit-remaining"];
+        const rateLimited = status === 429 || remaining === "0" || remaining === 0;
+        if (rateLimited) {
+          throw new HttpError(429, "GITHUB_RATE_LIMITED", "GitHub rate limit hit — wait a few minutes and try again.");
+        }
+        throw new HttpError(403, "GITHUB_FORBIDDEN", `GitHub denied access — make sure the token has \`repo\` scope for ${owner}/${repo}.`);
+      }
       throw new HttpError(502, "GITHUB_API_ERROR", `GitHub API error: ${ghErr?.message ?? "unknown"}`);
     }
-    const languages = await octokit.rest.repos.listLanguages({ owner, repo });
-    const primaryLang =
-      Object.entries(languages.data).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
     const fullName = `${owner}/${repo}`;
     const existing = await prisma.repository.findUnique({
@@ -54,14 +84,39 @@ router.post("/connect", async (req: AuthedRequest, res, next) => {
       throw new HttpError(409, "REPO_ALREADY_CONNECTED", "Repository is already connected to this account");
     }
 
-    const repository = await prisma.repository.create({
-      data: {
-        userId: req.userId!,
-        fullName,
-        defaultBranch: gh.data.default_branch,
-        primaryLanguage: primaryLang,
-      },
+    // Reserve the quota slot with an atomic conditional decrement — the
+    // re-check on reposRemaining closes the race with a concurrent connect.
+    const reserved = await prisma.subscription.updateMany({
+      where: { id: subscription.id, reposRemaining: { gt: 0 } },
+      data: { reposRemaining: { decrement: 1 } },
     });
+    if (reserved.count === 0) {
+      throw new HttpError(403, "QUOTA_EXCEEDED", quotaMessage);
+    }
+
+    let repository;
+    try {
+      repository = await prisma.repository.create({
+        data: {
+          userId: req.userId!,
+          fullName,
+          // Empty repos return "" — store the schema default instead.
+          defaultBranch: gh.data.default_branch || "main",
+          primaryLanguage: primaryLang,
+        },
+      });
+    } catch (createErr) {
+      // Release the reservation on any create failure (e.g. the unique
+      // userId_fullName constraint racing a concurrent connect).
+      await prisma.subscription.updateMany({
+        where: { id: subscription.id },
+        data: { reposRemaining: { increment: 1 } },
+      });
+      if ((createErr as { code?: string })?.code === "P2002") {
+        throw new HttpError(409, "REPO_ALREADY_CONNECTED", "Repository is already connected to this account");
+      }
+      throw createErr;
+    }
 
     ok(res, repository, 201);
   } catch (err) {
@@ -157,6 +212,12 @@ router.delete("/:repoId", async (req: AuthedRequest, res, next) => {
     if (deleted.count === 0) {
       throw new HttpError(404, "NOT_FOUND", "Repository does not exist");
     }
+    // Freeing a repo must free its quota slot (the dashboard promises this);
+    // without it, one failed connect locked the account out forever.
+    await prisma.subscription.updateMany({
+      where: { userId: req.userId },
+      data: { reposRemaining: { increment: 1 } },
+    });
     ok(res, { deleted: true });
   } catch (err) {
     next(err);

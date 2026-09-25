@@ -109,4 +109,21 @@ describe("OAuth state flow", () => {
     const location = res.headers.get("location") as string;
     expect(location).toContain("state%20mismatch");
   });
+
+  it("maps GitHub ?error=access_denied (user cancelled) to a friendly message, not state mismatch", async () => {
+    const init = await fetch(`${baseUrl}/v1/auth/github`, { redirect: "manual" });
+    const state = extractState(init.headers.get("location") as string);
+
+    // Clicking "Cancel" on GitHub returns error=access_denied with state but
+    // no code — the old callback reported it as "OAuth state mismatch".
+    const res = await fetch(
+      `${baseUrl}/v1/auth/github/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+      { redirect: "manual" }
+    );
+    expect(res.status).toBe(302);
+    const location = res.headers.get("location") as string;
+    expect(location).toContain("/login?error=");
+    expect(location).toContain("cancelled");
+    expect(location).not.toContain("state%20mismatch");
+  });
 });

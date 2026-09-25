@@ -30,11 +30,21 @@ export function verifyToken(token: string | undefined): AuthPayload {
   if (!token) {
     throw new Error("UNAUTHORIZED");
   }
-  const payload = jwt.verify(token, JWT_SECRET!) as AuthPayload;
-  if (!payload.userId) {
+  // The API signs session JWTs with the standard `sub` claim; only test
+  // helpers used `userId`. Requiring `userId` rejected every real session
+  // token, so the websocket handshake failed with UNAUTHORIZED for all
+  // production users — `repo:join` never landed and analysis progress never
+  // arrived. Accept both spellings.
+  const payload = jwt.verify(token, JWT_SECRET!) as {
+    sub?: string;
+    userId?: string;
+    githubId?: number;
+  };
+  const userId = payload.userId ?? payload.sub;
+  if (!userId) {
     throw new Error("UNAUTHORIZED");
   }
-  return payload;
+  return { userId, githubId: payload.githubId };
 }
 
 export function extractTokenFromCookie(

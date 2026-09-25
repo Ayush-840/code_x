@@ -8,7 +8,11 @@
       "types": "./generated/index.d.ts",
       "default": "./generated/index.js"
     },
-    "./migrations": "./migrations.js"
+    "./migrations": "./migrations.js",
+    "./artifacts": {
+      "types": "./artifacts.d.ts",
+      "default": "./artifacts.js"
+    }
   },
   "scripts": {
     "prisma": "prisma",

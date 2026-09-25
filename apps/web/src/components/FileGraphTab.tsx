@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Folder, FileCode, ArrowRight, ExternalLink, ChevronRight, ChevronDown, Filter, Loader2 } from "lucide-react";
 import type { FileTreeNode } from "@/components/FileGraph";
+import { FileConnectionsGraph } from "@/components/FileConnectionsGraph";
+import { computeConnections, type FileEdge } from "@/lib/fileConnections";
 
 interface FileExplanation {
   summary?: string;
@@ -16,6 +18,9 @@ interface FileExplanation {
 export interface FileGraphTabProps {
   fetchTree: () => Promise<FileTreeNode>;
   explainFile: (path: string) => Promise<FileExplanation>;
+  /** Optional importer/importer edges (`file-edges` artifact); when absent
+   *  the connected-files graph falls back to structural relationships. */
+  fetchFileEdges?: () => Promise<FileEdge[]>;
 }
 
 interface FileListItem {
@@ -67,7 +72,7 @@ function getTopLevelDirs(root: FileTreeNode): string[] {
   return Array.from(dirs).sort();
 }
 
-export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
+export function FileGraphTab({ fetchTree, explainFile, fetchFileEdges }: FileGraphTabProps) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +90,9 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
   // Per-path explanation cache (PRD-F07): re-selecting a file is instant and
   // re-renders with new prop identities never re-request the same file.
   const explanationCache = useRef<Map<string, FileExplanation>>(new Map());
+  // Import edges for the connected-files graph (PRD-G02) — loaded once,
+  // silently; repos analyzed before edges existed just get structural links.
+  const [fileEdges, setFileEdges] = useState<FileEdge[]>([]);
 
   // Load tree — first load shows the full-panel spinner; any later run of this
   // effect (a genuinely changed fetcher identity) refreshes silently in the
@@ -161,6 +169,25 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
     return () => { cancelled = true; };
   }, [selectedPath, explainFile]);
 
+  // Load import edges once (silent — never touches the loading state).
+  // Identity-only re-fetches with identical data are dropped so the graph
+  // cannot re-render from data-equivalent refetches (TRD-F01).
+  useEffect(() => {
+    if (!fetchFileEdges) return;
+    let cancelled = false;
+    fetchFileEdges()
+      .then((next) => {
+        if (cancelled) return;
+        setFileEdges((prev) =>
+          prev.length === next.length && JSON.stringify(prev) === JSON.stringify(next) ? prev : next
+        );
+      })
+      .catch(() => {
+        // Artifact absent (older analysis) — structural connections still work.
+      });
+    return () => { cancelled = true; };
+  }, [fetchFileEdges]);
+
   const fileItems = useMemo(() => {
     if (!tree) return [];
     return flattenTree(tree, expanded);
@@ -181,6 +208,13 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
   }, [fileItems, filter, dirFilter]);
 
   const topLevelDirs = useMemo(() => tree ? getTopLevelDirs(tree) : [], [tree]);
+
+  // Connected-files neighborhood of the selection (PRD-G02): pure memo, so
+  // parent re-renders with new prop identities cannot recompute or flash it.
+  const connections = useMemo(
+    () => (tree && selectedPath ? computeConnections(tree, selectedPath, fileEdges) : null),
+    [tree, selectedPath, fileEdges]
+  );
 
   const toggleDir = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -432,6 +466,22 @@ export function FileGraphTab({ fetchTree, explainFile }: FileGraphTabProps) {
                 </div>
               </div>
             </div>
+
+            {/* Connected files graph (PRD-G02): click a node to switch the
+                detail pane (and explainer) to that file. */}
+            {connections && (
+              <div className="border border-lab-border rounded-lg p-3 bg-lab-bg">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-lab-dim uppercase tracking-wider">
+                    Connected files
+                  </span>
+                  <span className="text-[10px] text-lab-dim font-mono" data-testid="connections-count">
+                    {connections.nodes.length}
+                  </span>
+                </div>
+                <FileConnectionsGraph connections={connections} onSelect={handleFileClick} />
+              </div>
+            )}
 
             {/* Explanation Content */}
             {explainLoading ? (

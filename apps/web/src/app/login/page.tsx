@@ -17,10 +17,11 @@ function LoginContent() {
       router.replace("/dashboard");
       return;
     }
-    // Check for auth error
+    // Check for auth error. useSearchParams already decodes the value once —
+    // decoding again threw URIError on any message containing "%".
     const authError = params.get("error");
     if (authError) {
-      setErrorMsg(decodeURIComponent(authError));
+      setErrorMsg(authError);
       setMode("error");
       return;
     }
