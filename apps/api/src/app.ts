@@ -18,7 +18,7 @@ import mockInterviewRoutes from "./routes/mockInterviews";
 import usageRoutes from "./routes/usage";
 import billingRoutes from "./routes/billing";
 import publicAnalysisRoutes from "./routes/publicAnalysis";
-import codegraphRoutes from "./routes/codegraph";
+import codegraphRoutes, { publicRouter as publicCodegraphRoutes } from "./routes/codegraph";
 
 export function createApp() {
   const app = express();
@@ -55,6 +55,11 @@ export function createApp() {
   // that layer runs requireAuth for every /v1/* request and would 401 these
   // public, no-auth routes before they ever match.
   app.use("/v1/public", publicAnalysisRoutes);
+  // Anonymous CodeGraph flow: the public analyze page calls
+  // /v1/public/:id/codegraph — mounted here, before any /v1 requireAuth layer,
+  // so unauthenticated visitors don't hit the broad auth middleware and get a
+  // 401 "Missing or invalid authentication token".
+  app.use("/v1/public", publicCodegraphRoutes);
   app.use("/v1/users", requireAuth, userRoutes);
   app.use("/v1/repos", requireAuth, repoRoutes);
   app.use("/v1/repos", requireAuth, artifactRoutes);

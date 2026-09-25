@@ -15,7 +15,33 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth";
  * public analysis) and forward {repo_id, ...} to the service.
  */
 
+/**
+ * Authed router (mounted at /v1/repos, behind the app-level requireAuth):
+ * full-graph, explain and chat for repos owned by the signed-in user.
+ */
 const router = Router();
+
+/**
+ * Anonymous router (mounted at /v1/public in app.ts): same three operations
+ * for public analyses, no auth. This MUST live on its own router — the
+ * anonymous analyze page calls /v1/public/:id/codegraph, and when these
+ * handlers only existed on the /v1/repos-mounted router the request fell
+ * through to the broad "/v1" requireAuth layer and 401'd every anonymous
+ * visitor with "Missing or invalid authentication token".
+ */
+export const publicRouter = Router();
+
+// PublicAnalysis.id is a Postgres uuid column: querying it with a non-uuid
+// makes Prisma throw a cast error that surfaces as a 500. These routes are
+// reachable with arbitrary visitor-supplied URLs, so validate the shape
+// first and report garbage ids as the 404 they really are.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function requireValidAnalysisId(id: string): void {
+  if (!UUID_RE.test(id)) {
+    throw new HttpError(404, "NOT_FOUND", "Analysis not found");
+  }
+}
 
 const PROXY_TIMEOUT_MS = 60_000;
 
@@ -160,8 +186,9 @@ router.post(
 // --- Anonymous flow (public analyses) --------------------------------------
 
 /** GET /:id/codegraph — graph for an anonymous analysis. */
-router.get("/:id/codegraph", anonymousRateLimit("status"), async (req, res, next) => {
+publicRouter.get("/:id/codegraph", anonymousRateLimit("status"), async (req, res, next) => {
   try {
+    requireValidAnalysisId(req.params.id);
     const pa = await prisma.publicAnalysis.findUnique({
       where: { id: req.params.id },
       select: { id: true, repoId: true, expiresAt: true },
@@ -183,7 +210,7 @@ router.get("/:id/codegraph", anonymousRateLimit("status"), async (req, res, next
 });
 
 /** POST /:id/codegraph/explain { node_id } — anonymous node explanation. */
-router.post(
+publicRouter.post(
   "/:id/codegraph/explain",
   fileExplainRateLimit(),
   anonymousRateLimit("status"),
@@ -193,6 +220,7 @@ router.post(
       if (!node_id || typeof node_id !== "string") {
         throw new HttpError(400, "VALIDATION_ERROR", "node_id is required");
       }
+      requireValidAnalysisId(req.params.id);
       const pa = await prisma.publicAnalysis.findUnique({
         where: { id: req.params.id },
         select: { id: true, repoId: true, expiresAt: true },
@@ -215,7 +243,7 @@ router.post(
 );
 
 /** POST /:id/codegraph/chat { question } — anonymous graph-grounded chat. */
-router.post(
+publicRouter.post(
   "/:id/codegraph/chat",
   fileExplainRateLimit(),
   anonymousRateLimit("status"),
@@ -225,6 +253,7 @@ router.post(
       if (!question || typeof question !== "string") {
         throw new HttpError(400, "VALIDATION_ERROR", "question is required");
       }
+      requireValidAnalysisId(req.params.id);
       const pa = await prisma.publicAnalysis.findUnique({
         where: { id: req.params.id },
         select: { id: true, repoId: true, expiresAt: true },
