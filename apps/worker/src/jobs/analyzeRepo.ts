@@ -11,6 +11,7 @@ const prisma = new PrismaClient();
 const ANALYSIS_URL = process.env.ANALYSIS_SERVICE_URL ?? "http://localhost:8100";
 const RETRIEVAL_URL = process.env.RETRIEVAL_SERVICE_URL ?? "http://localhost:8200";
 const GENERATION_URL = process.env.GENERATION_SERVICE_URL ?? "http://localhost:8300";
+const CODEGRAPH_URL = process.env.CODEGRAPH_SERVICE_URL ?? "http://localhost:8500";
 
 interface AnalyzeRepoData {
   repoId: string;
@@ -322,6 +323,40 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       artifactType: "file-edges",
       content: { edges: parsed.fileEdges ?? [] },
     });
+
+    // 4e. CODEGRAPH PARSE (best-effort) — ask the codegraph service to parse
+    // the SAME cloned directory (no second clone) and key its graph by
+    // repoId, so /explain and /chat work for this repo immediately. An
+    // enhancement to chat/explain, not a core artifact — a failure here
+    // logs and moves on, exactly like deployment detection.
+    try {
+      const cgRes = await fetch(`${CODEGRAPH_URL}/parse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo_id: repoId, repo_path: dir }),
+      });
+      if (!cgRes.ok) {
+        const detail = await cgRes.text().catch(() => "");
+        console.warn(
+          `[worker] codegraph parse failed (HTTP ${cgRes.status}): ${detail.slice(0, 200)}`
+        );
+      } else {
+        const cg = (await cgRes.json()) as { nodes?: number; edges?: number };
+        console.log(
+          `[worker] codegraph parsed ${cg.nodes ?? 0} node(s), ${cg.edges ?? 0} edge(s) for ${fullName}`
+        );
+        // Persist existence + shape so the frontend can offer the Code Graph
+        // view without a probe call to the codegraph service.
+        await createArtifact(prisma, {
+          repoId,
+          jobId,
+          artifactType: "codegraph",
+          content: { nodes: cg.nodes ?? 0, edges: cg.edges ?? 0 },
+        });
+      }
+    } catch (cgErr) {
+      console.warn(`[worker] codegraph parse unreachable, skipping:`, cgErr);
+    }
 
     // 5. DONE
     await progress(jobId, "DONE", 100, "Analysis complete");
