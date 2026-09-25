@@ -18,6 +18,7 @@ import mockInterviewRoutes from "./routes/mockInterviews";
 import usageRoutes from "./routes/usage";
 import billingRoutes from "./routes/billing";
 import publicAnalysisRoutes from "./routes/publicAnalysis";
+import codegraphRoutes from "./routes/codegraph";
 
 export function createApp() {
   const app = express();
@@ -58,6 +59,7 @@ export function createApp() {
   app.use("/v1/repos", requireAuth, repoRoutes);
   app.use("/v1/repos", requireAuth, artifactRoutes);
   app.use("/v1/repos", requireAuth, fileExplainRoutes);
+  app.use("/v1/repos", requireAuth, codegraphRoutes);
   app.use("/v1/chat", requireAuth, chatRoutes);
   app.use("/v1", requireAuth, mockInterviewRoutes);
   app.use("/v1/usage", requireAuth, usageRoutes);

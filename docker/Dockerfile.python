@@ -15,17 +15,26 @@ COPY packages/analysis/pyproject.toml /tmp/analysis/pyproject.toml
 COPY packages/retrieval/pyproject.toml /tmp/retrieval/pyproject.toml
 COPY packages/generation/pyproject.toml /tmp/generation/pyproject.toml
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/pyproject.toml
+# codegraph services use PEP 621 metadata (pip, not poetry export)
+COPY packages/codegraph-parser/pyproject.toml /tmp/codegraph-parser/pyproject.toml
+COPY packages/codegraph-api/pyproject.toml /tmp/codegraph-api/pyproject.toml
 
 # Export each service's deps to requirements.txt and install
 RUN for svc in analysis retrieval generation mock-interview; do \
       cd /tmp/$svc && poetry export -f requirements.txt --without-hashes -o requirements.txt 2>/dev/null || \
       (python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); [print(f'{k}{v}') for k,v in d.get('tool',{}).get('poetry',{}).get('dependencies',{}).items() if k!='python']" > requirements.txt); \
     done
-RUN pip install --no-cache-dir \
+# codegraph deps come straight from PEP 621 metadata (no poetry export); the
+# file:// codegraph-parser dep is dropped — its code ships via PYTHONPATH.
+RUN python -c "import tomllib; d=tomllib.load(open('/tmp/codegraph-parser/pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" | grep -v 'file://' > /tmp/codegraph-parser/requirements.txt \
+    && python -c "import tomllib; d=tomllib.load(open('/tmp/codegraph-api/pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" | grep -v 'file://' > /tmp/codegraph-api/requirements.txt \
+    && pip install --no-cache-dir \
     -r /tmp/analysis/requirements.txt \
     -r /tmp/retrieval/requirements.txt \
     -r /tmp/generation/requirements.txt \
-    -r /tmp/mock-interview/requirements.txt
+    -r /tmp/mock-interview/requirements.txt \
+    -r /tmp/codegraph-parser/requirements.txt \
+    -r /tmp/codegraph-api/requirements.txt
 
 FROM base AS runner
 COPY packages/ ./packages/
@@ -43,4 +52,6 @@ CMD if [ "$SERVICE" = "analysis" ]; then \
       uvicorn generation.main:app --host 0.0.0.0 --app-dir packages/generation/src --port 8300; \
     elif [ "$SERVICE" = "mock-interview" ]; then \
       uvicorn mock_interview.main:app --host 0.0.0.0 --app-dir packages/mock-interview/src --port 8400; \
+    elif [ "$SERVICE" = "codegraph" ]; then \
+      uvicorn codegraph_api.main:app --host 0.0.0.0 --app-dir packages/codegraph-api/src --port 8500; \
     fi

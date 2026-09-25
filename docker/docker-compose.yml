@@ -49,6 +49,7 @@ services:
       RETRIEVAL_SERVICE_URL: http://retrieval:8200
       GENERATION_SERVICE_URL: http://generation:8300
       MOCK_INTERVIEW_SERVICE_URL: http://mock-interview:8400
+      CODEGRAPH_SERVICE_URL: http://codegraph:8500
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +87,7 @@ services:
       ANALYSIS_SERVICE_URL: http://analysis:8100
       RETRIEVAL_SERVICE_URL: http://retrieval:8200
       GENERATION_SERVICE_URL: http://generation:8300
+      CODEGRAPH_SERVICE_URL: http://codegraph:8500
     depends_on:
       postgres:
         condition: service_healthy
@@ -144,6 +146,27 @@ services:
     ports:
       - "8400:8400"
 
+  # Repo-keyed dependency graph + LLM explain/chat. Shares the python-all
+  # image's dependency set is NOT available here — this builds from its own
+  # source on the shared Dockerfile.python pattern.
+  codegraph:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE: codegraph
+    container_name: vibecoder-codegraph
+    ports:
+      - "8500:8500"
+    environment:
+      CODEGRAPH_STORAGE_DIR: /tmp/vibecoder-codegraph
+      NVIDIA_API_KEYS: ${NVIDIA_API_KEYS:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - vibecoder-codegraph-data:/tmp/vibecoder-codegraph
+
+  web:
+
   web:
     build:
       context: ..
@@ -162,3 +185,4 @@ services:
 volumes:
   vibecoder-pgdata:
   vibecoder-retrieval-data:
+  vibecoder-codegraph-data:

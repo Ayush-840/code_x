@@ -14,7 +14,7 @@ export default defineRailway(() => {
     deploy: { restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 3 },
     replicas: { "sfo": 1 },
     volumeMounts: { "/data/retrieval": pythonVolume },
-    env: { ANTHROPIC_API_KEY: preserve(), GEMINI_API_KEYS: preserve(), NVIDIA_API_KEYS: preserve(), NVIDIA_BASE_URL: preserve(), NVIDIA_CHAT_MODEL: preserve(), NVIDIA_EMBED_MODEL: preserve(), RETRIEVAL_STORAGE_DIR: preserve() },
+    env: { ANTHROPIC_API_KEY: preserve(), CODEGRAPH_STORAGE_DIR: preserve(), GEMINI_API_KEYS: preserve(), NVIDIA_API_KEYS: preserve(), NVIDIA_BASE_URL: preserve(), NVIDIA_CHAT_MODEL: preserve(), NVIDIA_EMBED_MODEL: preserve(), RETRIEVAL_STORAGE_DIR: preserve() },
   });
   const apiWorker = service("api-worker", {
     build: { builder: "DOCKERFILE", dockerfilePath: "docker/Dockerfile.api-worker" },
@@ -26,7 +26,7 @@ export default defineRailway(() => {
       restartPolicyMaxRetries: 3,
     },
     replicas: { "sfo": 1 },
-    env: { ANALYSIS_SERVICE_URL: preserve(), API_URL: preserve(), COOKIE_CROSS_SITE: preserve(), DATABASE_URL: preserve(), FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), GITHUB_CLIENT_ID: preserve(), GITHUB_CLIENT_SECRET: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), NODE_ENV: preserve(), PORT: preserve(), REDIS_URL: preserve(), RETRIEVAL_SERVICE_URL: preserve() },
+    env: { ANALYSIS_SERVICE_URL: preserve(), API_URL: preserve(), CODEGRAPH_SERVICE_URL: preserve(), COOKIE_CROSS_SITE: preserve(), DATABASE_URL: preserve(), FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), GITHUB_CLIENT_ID: preserve(), GITHUB_CLIENT_SECRET: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), NODE_ENV: preserve(), PORT: preserve(), REDIS_URL: preserve(), RETRIEVAL_SERVICE_URL: preserve() },
   });
   const websocket = service("websocket", {
     build: { builder: "DOCKERFILE", dockerfilePath: "apps/websocket/Dockerfile" },

@@ -1,4 +1,4 @@
-# Hosted deployment: builds all 4 Python services into ONE container.
+# Hosted deployment: builds all 5 Python services into ONE container.
 # CI (.github/workflows/docker.yml → build-python) pushes this as
 # ghcr.io/ayush-840/code_x-python — this is the image deployed on Railway.
 FROM python:3.13-slim AS base
@@ -15,11 +15,21 @@ COPY packages/analysis/pyproject.toml /tmp/analysis/
 COPY packages/retrieval/pyproject.toml /tmp/retrieval/
 COPY packages/generation/pyproject.toml /tmp/generation/
 COPY packages/mock-interview/pyproject.toml /tmp/mock-interview/
+COPY packages/codegraph-parser/pyproject.toml /tmp/codegraph-parser/
+COPY packages/codegraph-api/pyproject.toml /tmp/codegraph-api/
 
 # Install each service with Poetry
 RUN for svc in analysis retrieval generation mock-interview; do \
       cd /tmp/$svc && poetry config virtualenvs.create false && poetry install --no-interaction --no-root; \
     done
+
+# codegraph services use PEP 621 [project] metadata (not Poetry). Install only
+# their dependencies (the code itself ships via PYTHONPATH below, like the
+# Poetry services with --no-root); drop the file:// relative dep on
+# codegraph-parser, whose package is also on PYTHONPATH.
+RUN python -c "import tomllib; d=tomllib.load(open('/tmp/codegraph-parser/pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" | grep -v 'file://' > /tmp/codegraph-parser/requirements.txt \
+    && python -c "import tomllib; d=tomllib.load(open('/tmp/codegraph-api/pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" | grep -v 'file://' > /tmp/codegraph-api/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/codegraph-parser/requirements.txt -r /tmp/codegraph-api/requirements.txt
 
 FROM base AS runner
 COPY packages/ ./packages/
@@ -28,11 +38,16 @@ COPY packages/ ./packages/
 ENV RETRIEVAL_STORAGE_DIR=/data/retrieval
 RUN mkdir -p /data/retrieval
 
-ENV PYTHONPATH=/app/packages/shared_python/src:/app/packages/analysis/src:/app/packages/retrieval/src:/app/packages/generation/src:/app/packages/mock-interview/src
+# Persisted codegraph graphs (repo-keyed JSON, same class of state as the
+# retrieval index — must survive restarts).
+ENV CODEGRAPH_STORAGE_DIR=/data/codegraph
+RUN mkdir -p /data/codegraph
+
+ENV PYTHONPATH=/app/packages/shared_python/src:/app/packages/analysis/src:/app/packages/retrieval/src:/app/packages/generation/src:/app/packages/mock-interview/src:/app/packages/codegraph-api/src:/app/packages/codegraph-parser/src
 
 COPY docker/start-python-services.sh /start-python-services.sh
 RUN chmod +x /start-python-services.sh
 
-EXPOSE 8100 8200 8300 8400
+EXPOSE 8100 8200 8300 8400 8500
 
 CMD ["/start-python-services.sh"]

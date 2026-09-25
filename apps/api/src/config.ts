@@ -62,6 +62,7 @@ export const config = {
   retrievalServiceUrl: optionalEnv("RETRIEVAL_SERVICE_URL", "http://localhost:8200"),
   generationServiceUrl: optionalEnv("GENERATION_SERVICE_URL", "http://localhost:8300"),
   mockInterviewServiceUrl: optionalEnv("MOCK_INTERVIEW_SERVICE_URL", "http://localhost:8400"),
+  codegraphServiceUrl: optionalEnv("CODEGRAPH_SERVICE_URL", "http://localhost:8500"),
   stripeSecretKey: optionalEnv("STRIPE_SECRET_KEY", ""),
   stripeWebhookSecret: optionalEnv("STRIPE_WEBHOOK_SECRET", ""),
   isProd,

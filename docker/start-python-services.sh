@@ -19,5 +19,9 @@ echo "[python-all] generation -> :8300"
 uvicorn mock_interview.main:app --host 0.0.0.0 --app-dir /app/packages/mock-interview/src --port 8400 &
 echo "[python-all] mock-interview -> :8400"
 
-echo "[python-all] All 4 services started. Waiting..."
+# CodeGraph service on 8500 (repo-keyed graph store + LLM explain/chat)
+uvicorn codegraph_api.main:app --host 0.0.0.0 --app-dir /app/packages/codegraph-api/src --port 8500 &
+echo "[python-all] codegraph -> :8500"
+
+echo "[python-all] All 5 services started. Waiting..."
 wait

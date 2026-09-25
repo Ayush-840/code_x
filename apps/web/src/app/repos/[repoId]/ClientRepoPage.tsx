@@ -12,6 +12,7 @@ import { ChatTab } from "@/components/tabs/ChatTab";
 import { MockInterviewTab } from "@/components/tabs/MockInterviewTab";
 import { DeploymentTab } from "@/components/tabs/DeploymentTab";
 import { FileGraphTab } from "@/components/FileGraphTab";
+import { CodeGraphTab, type CodeGraphData } from "@/components/CodeGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
 import type { FileEdge } from "@/lib/fileConnections";
 import { useRouter } from "next/navigation";
@@ -24,7 +25,7 @@ interface FileExplanation {
   isDemo?: boolean;
 }
 
-type Tab = "architecture" | "filegraph" | "modules" | "questions" | "chat" | "interview" | "deployment";
+type Tab = "architecture" | "filegraph" | "codegraph" | "modules" | "questions" | "chat" | "interview" | "deployment";
 
 interface Repo {
   id: string;
@@ -38,6 +39,7 @@ interface Repo {
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "architecture", label: "Architecture",   icon: "🏗️" },
   { key: "filegraph",    label: "File Graph",      icon: "🗂️" },
+  { key: "codegraph",    label: "Code Graph",     icon: "🕸️" },
   { key: "modules",      label: "Modules",         icon: "🧩" },
   { key: "questions",    label: "Question Bank",   icon: "❓" },
   { key: "chat",         label: "Ask",             icon: "💬" },
@@ -200,6 +202,7 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
             {activeTab === "filegraph" && (
               <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} fetchFileEdges={fetchFileEdges} />
             )}
+            {activeTab === "codegraph" && <CodeGraphSection repoId={repoId} />}
             {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
             {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}
             {activeTab === "chat"         && <ChatTab repoId={repoId} socket={socket} />}
@@ -210,6 +213,30 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
       </div>
     </div>
   );
+}
+
+/**
+ * CodeGraph tab wiring (PRD-G03): memoized fetchers hit the API's codegraph
+ * proxy routes; memoization keeps the tab's load effect from re-firing on
+ * parent re-renders (the TRD-F01 contract).
+ */
+function CodeGraphSection({ repoId }: { repoId: string }) {
+  const api = useAuthedFetch();
+  const fetchGraph = useCallback(
+    () => api.get<CodeGraphData>(`/repos/${repoId}/graph`),
+    [api, repoId]
+  );
+  const explainNode = useCallback(
+    (nodeId: string) =>
+      api.post<{ explanation: string }>(`/repos/${repoId}/explain`, { node_id: nodeId }),
+    [api, repoId]
+  );
+  const ask = useCallback(
+    (question: string) =>
+      api.post<{ answer: string; cited_nodes: string[] }>(`/repos/${repoId}/chat`, { question }),
+    [api, repoId]
+  );
+  return <CodeGraphTab fetchGraph={fetchGraph} explainNode={explainNode} ask={ask} />;
 }
 
 const S = {

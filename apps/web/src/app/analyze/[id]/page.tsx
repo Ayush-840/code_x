@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
+import { CodeGraphTab, type CodeGraphData } from "@/components/CodeGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
 import type { FileEdge } from "@/lib/fileConnections";
 
@@ -51,7 +52,7 @@ export default function PublicAnalysisPage() {
   const id = params.id as string;
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "deployment">("modules");
+  const [activeTab, setActiveTab] = useState<"modules" | "files" | "architecture" | "codegraph" | "deployment">("modules");
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +109,23 @@ export default function PublicAnalysisPage() {
     const content = fileEdgesArtifact?.content as { edges?: FileEdge[] } | undefined;
     return content?.edges ?? [];
   }, [fileEdgesArtifact]);
+
+  // CodeGraph tab fetchers (PRD-G03, anonymous flow): hit the API's public
+  // codegraph proxy routes. Keyed on id — stable for the page's lifetime.
+  const fetchCodeGraph = useCallback(
+    () => publicGet<CodeGraphData>(`/v1/public/${id}/codegraph`),
+    [id]
+  );
+  const explainNode = useCallback(
+    (nodeId: string) =>
+      publicPost<{ explanation: string }>(`/v1/public/${id}/codegraph/explain`, { node_id: nodeId }),
+    [id]
+  );
+  const askGraph = useCallback(
+    (question: string) =>
+      publicPost<{ answer: string; cited_nodes: string[] }>(`/v1/public/${id}/codegraph/chat`, { question }),
+    [id]
+  );
 
   if (error) {
     return (
@@ -222,7 +240,7 @@ export default function PublicAnalysisPage() {
 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 pb-20 space-y-6">
         <nav className="flex gap-2 border-b border-lab-border pb-2">
-          {(["modules", "files", "architecture", "deployment"] as const).map((t) => (
+          {(["modules", "files", "codegraph", "architecture", "deployment"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -235,6 +253,7 @@ export default function PublicAnalysisPage() {
               {t === "modules" && "🧩 "}
               {t === "files" && "🗂️ "}
               {t === "architecture" && "🏗️ "}
+              {t === "codegraph" && "🕸️ "}
               {t === "deployment" && "🚀 "}
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -292,6 +311,10 @@ export default function PublicAnalysisPage() {
             explainFile={explainFile}
             fetchFileEdges={fetchFileEdges}
           />
+        )}
+
+        {activeTab === "codegraph" && (
+          <CodeGraphTab fetchGraph={fetchCodeGraph} explainNode={explainNode} ask={askGraph} />
         )}
 
         {activeTab === "architecture" && (
