@@ -70,7 +70,7 @@ Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
 | `JWT_SECRET` | 32+ random chars — must match the websocket service |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | From the GitHub OAuth App |
 | `FRONTEND_URL` | **Every visitor-facing Vercel domain, comma-separated** — live value: `https://codex-ayush-840s-projects.vercel.app,https://codex-tau-rust.vercel.app` (see alias warning below) |
-| `FRONTEND_PREVIEW_PATTERN` | Optional regex for Vercel preview URLs, e.g. `^https://code-x-git-.*-ayush840\.vercel\.app$` |
+| `FRONTEND_PREVIEW_PATTERN` | **Required for preview deployments** — live value: `^https://codex-.*-ayush-840s-projects\.vercel\.app$`. Without it every `*.vercel.app` preview URL is silently CORS-blocked and `fetch()` reports it as a generic network error ("Could not reach …"). Incident 2026-09-25: preview origins failed exactly this way while production origins passed. |
 | `API_URL` | **Public** URL of this service, e.g. `https://<api-worker>.up.railway.app` — used as the GitHub OAuth `redirect_uri`; must match the OAuth App callback exactly |
 | `COOKIE_CROSS_SITE` | `true` (session cookies become `SameSite=None; Secure` so cross-site requests from Vercel carry them) |
 | `ANALYSIS_SERVICE_URL` | `http://python.railway.internal:8100` |
