@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useAuthRedirect } from "@/components/auth";
 import { useAuthedFetch } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
@@ -184,16 +185,28 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
           ))}
         </nav>
 
-        {/* Tab content */}
-        {activeTab === "architecture" && <ArchitectureTab repoId={repoId} />}
-        {activeTab === "filegraph" && (
-          <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} fetchFileEdges={fetchFileEdges} />
-        )}
-        {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
-        {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}
-        {activeTab === "chat"         && <ChatTab repoId={repoId} socket={socket} />}
-        {activeTab === "interview"    && <MockInterviewTab repoId={repoId} socket={socket} />}
-        {activeTab === "deployment"   && <DeploymentTab repoId={repoId} />}
+        {/* Tab content — crossfade + slide on switch (UI Revamp Manual §4.2).
+            mode="wait" so tabs never stack; the key forces a remount so each
+            tab's own effects run exactly as before. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            {activeTab === "architecture" && <ArchitectureTab repoId={repoId} />}
+            {activeTab === "filegraph" && (
+              <FileGraphTab fetchTree={fetchTree} explainFile={explainFile} fetchFileEdges={fetchFileEdges} />
+            )}
+            {activeTab === "modules"      && <ModulesTab repoId={repoId} />}
+            {activeTab === "questions"    && <QuestionsTab repoId={repoId} />}
+            {activeTab === "chat"         && <ChatTab repoId={repoId} socket={socket} />}
+            {activeTab === "interview"    && <MockInterviewTab repoId={repoId} socket={socket} />}
+            {activeTab === "deployment"   && <DeploymentTab repoId={repoId} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

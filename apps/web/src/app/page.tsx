@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { isAuthenticated } from "@/lib/api";
+import { HeroReveal } from "@/components/HeroReveal";
+import { MotionLink } from "@/components/MotionLink";
 
 const FEATURES = [
   {
@@ -114,7 +117,9 @@ export default function LandingPage() {
 
         <h1 className="font-display text-5xl sm:text-7xl font-bold tracking-tight mb-6 leading-tight text-white">
           You built it.<br />
-          <span className="text-gradient">Can you explain it?</span>
+          <HeroReveal>
+            <span className="text-gradient">Can you explain it?</span>
+          </HeroReveal>
         </h1>
 
         <p className="text-lab-textMuted text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-sans">
@@ -124,13 +129,13 @@ export default function LandingPage() {
         </p>
 
         <div className="flex gap-4 justify-center flex-wrap mb-16">
-          <a href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
+          <MotionLink href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
             <span>Connect your repo</span>
             <span>→</span>
-          </a>
-          <a href="#how" className="btn btn-ghost btn-lg">
+          </MotionLink>
+          <MotionLink href="#how" className="btn btn-ghost btn-lg">
             See how it works
-          </a>
+          </MotionLink>
         </div>
 
         {/* Terminal mockup */}

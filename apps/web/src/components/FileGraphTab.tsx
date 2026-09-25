@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Folder, FileCode, ArrowRight, ExternalLink, ChevronRight, ChevronDown, Filter, Loader2 } from "lucide-react";
 import type { FileTreeNode } from "@/components/FileGraph";
 import { FileConnectionsGraph } from "@/components/FileConnectionsGraph";
@@ -408,9 +409,17 @@ export function FileGraphTab({ fetchTree, explainFile, fetchFileEdges }: FileGra
             const fileCount = isDir ? countFiles(item.node) : 0;
 
             return (
-              <button
+              <motion.button
                 key={item.node.path}
                 onClick={() => isDir ? toggleDir(item.node.path) : handleFileClick(item.node.path)}
+                // Staggered reveal on mount (UI Revamp Manual §4.3): rows
+                // cascade in when the list first loads or a directory
+                // expands. Keyed by path, so rows that stay mounted through
+                // filter/expand changes never re-animate. Delay is capped so
+                // a 500-file directory cannot crawl in.
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.22, delay: Math.min(idx * 0.02, 0.35), ease: "easeOut" }}
                 className={`w-full text-left px-2 py-2 rounded transition-colors flex items-center gap-2 ${
                   isSelected
                     ? "bg-lab-blue/15 text-lab-blue border-l-2 border-lab-blue"
@@ -435,22 +444,43 @@ export function FileGraphTab({ fetchTree, explainFile, fetchFileEdges }: FileGra
                     {fileCount}
                   </span>
                 )}
-              </button>
+              </motion.button>
             );
           })}
         </div>
       </div>
 
-      {/* Right: Detail Panel - 8 cols */}
-      <div className="md:col-span-8 font-mono space-y-6 overflow-y-auto pr-2">
+      {/* Right: Detail Panel - 8 cols. `layout` (UI Revamp Manual §4.3):
+          switching between a short and long explanation resizes the panel
+          smoothly instead of snapping. The keyed AnimatePresence crossfades
+          content when the selected file changes. */}
+      <motion.div
+        className="md:col-span-8 font-mono space-y-6 overflow-y-auto pr-2"
+        layout
+        transition={{ layout: { duration: 0.25, ease: "easeOut" } }}
+      >
+        <AnimatePresence mode="wait" initial={false}>
         {!selectedPath ? (
-          <div className="text-center py-12 text-lab-textMuted">
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-center py-12 text-lab-textMuted"
+          >
             <Folder className="w-12 h-12 mx-auto mb-4 text-lab-blue/30" />
             <p className="text-sm">Click a file in the sidebar to see its explanation</p>
             <p className="text-[11px] mt-1">Files are grouped by directory. Use filters to narrow down.</p>
-          </div>
+          </motion.div>
         ) : (
-          <>
+          <motion.div
+            key={selectedPath}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
             {/* File header */}
             <div className="flex items-center gap-3 pb-3 border-b border-lab-border">
               <ExternalLink
@@ -591,9 +621,10 @@ export function FileGraphTab({ fetchTree, explainFile, fetchFileEdges }: FileGra
                 </button>
               </div>
             )}
-          </>
+          </motion.div>
         )}
-      </div>
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

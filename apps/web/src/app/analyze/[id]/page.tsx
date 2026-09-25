@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
@@ -240,6 +241,15 @@ export default function PublicAnalysisPage() {
           ))}
         </nav>
 
+        {/* Tab content — crossfade + slide on switch (UI Revamp Manual §4.2). */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
         {activeTab === "modules" && (
           <div className="space-y-4">
             <p className="text-xs font-mono text-lab-textMuted uppercase tracking-wider">
@@ -309,6 +319,8 @@ export default function PublicAnalysisPage() {
             )}
           </div>
         )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

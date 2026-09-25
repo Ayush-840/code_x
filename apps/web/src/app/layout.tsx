@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { SmoothScroll } from "@/components/SmoothScroll";
 import "./globals.css";
 
 const display = Bebas_Neue({ weight: "400", subsets: ["latin"], variable: "--font-display", display: "swap" });
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="bg-lab-bg text-lab-text antialiased min-h-screen flex flex-col">{children}</body>
+      <body className="bg-lab-bg text-lab-text antialiased min-h-screen flex flex-col">
+        <SmoothScroll>{children}</SmoothScroll>
+      </body>
     </html>
   );
 }
