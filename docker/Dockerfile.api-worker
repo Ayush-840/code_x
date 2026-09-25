@@ -40,14 +40,14 @@ COPY --from=builder /app/node_modules ./node_modules
 # node_modules into the root .pnpm store, so both levels are required at runtime.
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
-COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
-COPY --from=builder /app/packages/database/generated ./packages/database/generated
-COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
-# Package manifest is required for require("@vibe-coder/database") to resolve.
-COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
-# migrations.js backs the @vibe-coder/database/migrations subpath export;
-# the compiled api/worker dist bundles require it at boot (schema guard).
-COPY --from=builder /app/packages/database/migrations.js ./packages/database/migrations.js
+COPY --from=builder /app/packages/database ./packages/database
+# ^ Copy the whole package: every subpath export in packages/database/package.json
+#   (".", "./migrations", "./artifacts") must resolve at runtime. Cherry-picking
+#   files (prisma/, generated/, migrations.js) silently dropped artifacts.js, so
+#   apps/api and apps/worker crashed at boot with
+#   "Cannot find module '@vibe-coder/database/artifacts.js'" and every deploy
+#   since 2026-09-25 10:12 failed while the stale previous deployment kept
+#   serving with outdated CORS config.
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=apiuser:nodejs /app/apps/api/package.json ./apps/api/
@@ -59,6 +59,9 @@ RUN chmod -R u+w /app/node_modules/.pnpm/@prisma+engines@* 2>/dev/null || true
 
 COPY docker/start-api-worker.sh /start.sh
 RUN chmod +x /start.sh
+# Boot-time smoke test (see start script — fails the container when a shipped
+# subpath export or entrypoint is missing).
+COPY scripts/smoke-exports.cjs /app/scripts/smoke-exports.cjs
 
 USER apiuser
 EXPOSE 4000

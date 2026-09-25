@@ -7,6 +7,11 @@ set -e
 # outside Railway, run:
 #   ./node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
+# Fail fast if any subpath export / entrypoint shipped in this image is
+# missing (the artifacts.js outage class). Exits non-zero, which stops the
+# container, so a broken image never serves traffic.
+node /app/scripts/smoke-exports.cjs /app
+
 echo "[start] Starting API + Worker combined..."
 
 # Start the API server in background

@@ -28,8 +28,12 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/websocket/node_modules ./apps/websocket/node_modules
 COPY --from=builder --chown=wsuser:nodejs /app/apps/websocket/dist ./apps/websocket/dist
 COPY --from=builder --chown=wsuser:nodejs /app/apps/websocket/package.json ./apps/websocket/
+# Boot-time smoke test (fails the container when a shipped subpath export or
+# entrypoint is missing — the artifacts.js outage class).
+COPY --from=builder --chown=wsuser:nodejs scripts/smoke-exports.cjs ./scripts/smoke-exports.cjs
 
 USER wsuser
 EXPOSE 4001
 ENTRYPOINT []
-CMD ["node", "apps/websocket/dist/index.js"]
+# Run the export-map smoke test first; exec the server only if it passes.
+CMD ["sh", "-c", "node scripts/smoke-exports.cjs /app && exec node apps/websocket/dist/index.js"]
