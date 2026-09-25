@@ -48,11 +48,16 @@ const PROXY_TIMEOUT_MS = 60_000;
 async function fetchGraph<T>(repoId: string, path: string, body: unknown): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  // The graph read is GET-with-query on the Python side (@app.get("/graph"));
+  // explain/chat are JSON POSTs. Proxying /graph as POST made FastAPI answer
+  // 405 {"detail":"Method Not Allowed"} — surfacing in the tab as
+  // "CodeGraph service error". Match the method to the upstream route.
+  const isGet = path.startsWith("/graph");
   try {
     const res = await fetch(`${config.codegraphServiceUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_id: repoId, ...(body as object) }),
+      method: isGet ? "GET" : "POST",
+      headers: isGet ? undefined : { "Content-Type": "application/json" },
+      body: isGet ? undefined : JSON.stringify({ repo_id: repoId, ...(body as object) }),
       signal: controller.signal,
     });
     if (!res.ok) {
