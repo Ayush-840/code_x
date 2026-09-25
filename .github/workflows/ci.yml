@@ -113,8 +113,25 @@ jobs:
           for svc in analysis retrieval generation mock-interview; do
             (cd packages/$svc && poetry install --no-root)
           done
+      # codegraph-* use PEP 621 [project] metadata (not Poetry) — same install
+      # path as docker/Dockerfile.python-all: pip-install the dependencies from
+      # pyproject.toml (dropping the file:// self-references); the packages
+      # themselves ride on PYTHONPATH at test time.
+      - name: Install CodeGraph dependencies
+        run: |
+          python - <<'EOF'
+          import tomllib
+          with open("codegraph-requirements.txt", "w") as f:
+              for pkg in ("codegraph-parser", "codegraph-api"):
+                  deps = tomllib.load(open(f"packages/{pkg}/pyproject.toml", "rb"))["project"]["dependencies"]
+                  f.write("\n".join(d for d in deps if "file://" not in d) + "\n")
+          EOF
+          pip install -r codegraph-requirements.txt pytest
       - name: Run Python tests
         run: |
           for svc in analysis retrieval generation mock-interview; do
             (cd packages/$svc && poetry run pytest tests/ -v 2>/dev/null || echo "No tests found for $svc")
           done
+          # codegraph-parser first: codegraph-api imports it via PYTHONPATH.
+          export PYTHONPATH="$PWD/packages/codegraph-parser/src:$PWD/packages/codegraph-api/src"
+          python -m pytest packages/codegraph-parser/tests packages/codegraph-api/tests -v
