@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "CodeGraph parser using tree-sitter"
 requires-python = ">=3.11"
 dependencies = [
-    "tree-sitter>=0.21.0",
+    "tree-sitter>=0.25.0",
     "tree-sitter-python>=0.23.0",
     "networkx==3.3",
     "pydantic==2.8.2",

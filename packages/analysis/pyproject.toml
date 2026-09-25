@@ -9,7 +9,6 @@ packages = [{ include = "analysis", from = "src" }]
 python = "^3.11"
 fastapi = "^0.111.0"
 uvicorn = { extras = ["standard"], version = "^0.30.0" }
-tree-sitter = "^0.21.0"
 pydantic = "^2.7.0"
 pygments = "^2.17.0"
 

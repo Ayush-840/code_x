@@ -1,4 +1,4 @@
-from .parser import parse_repo, GraphData
+from .parser import parse_repo, GraphData, Node, Edge
 from .graph_store import GraphStore
 
-__all__ = ["parse_repo", "GraphData", "GraphStore"]
+__all__ = ["parse_repo", "GraphData", "Node", "Edge", "GraphStore"]
