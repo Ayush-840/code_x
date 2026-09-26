@@ -194,12 +194,9 @@ export function MockInterviewTab({
     const verdict = getVerdict(report.overallScore);
 
     return (
-      <div className="space-y-6">
-        <div>
-          <p className="section-label">05 // MOCK INTERVIEW</p>
-          <h2 className="section-title">Mock Interview Scorecard</h2>
-        </div>
-
+      <div className="max-w-3xl">
+        {/* Scorecard keeps its panel — it's a document-like report; the inner
+            "Evaluation Debrief" heading carries the title. */}
         <div className="panel p-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -283,13 +280,10 @@ export function MockInterviewTab({
   /* ────────────────────────────────────────────────────────── */
   if (!question) {
     return (
-      <div className="space-y-6">
-        <div>
-          <p className="section-label">05 // MOCK INTERVIEW</p>
-          <h2 className="section-title">Simulated Technical Interview</h2>
-        </div>
-
-        <div className="panel p-6 max-w-2xl mx-auto">
+      <div className="max-w-3xl">
+        {/* Setup keeps its panel (a form needs containment); its internal 🎙️
+            heading is the title — the old outer pair repeated it. */}
+        <div className="panel p-6">
           <div className="text-center mb-8">
             <div className="w-14 h-14 rounded-xl bg-lab-blueDim border border-lab-blue/30 flex items-center justify-center text-4xl mx-auto mb-4">
               🎙️
@@ -372,13 +366,10 @@ export function MockInterviewTab({
   const wordCount = answer.trim() ? answer.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="section-label">05 // MOCK INTERVIEW</p>
-        <h2 className="section-title">Interview Simulation</h2>
-      </div>
+    <div className="max-w-3xl">
+      <h2 className="text-2xl font-display text-white mb-4">Interview simulation</h2>
 
-      <div className="panel p-6 max-w-3xl mx-auto space-y-6">
+      <div className="panel p-6 space-y-6">
         {/* Top Info Bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

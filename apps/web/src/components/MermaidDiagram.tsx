@@ -53,14 +53,13 @@ export function MermaidDiagram({ chart }: { chart: string }) {
 
   if (error) {
     // Graceful fallback: show the raw syntax rather than a broken diagram.
+    // Plain classes — the global pre styling already handles the code surface.
     return (
       <div>
-        <div className="empty-state" style={{ padding: "16px", marginBottom: 12 }}>
-          <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-            Diagram couldn't be rendered — showing the raw definition.
-          </p>
-        </div>
-        <pre className="code-block" style={{ fontSize: 12 }}>{chart}</pre>
+        <p className="text-sm text-lab-textMuted mb-3">
+          Diagram couldn't be rendered — showing the raw definition.
+        </p>
+        <pre style={{ fontSize: 12 }}>{chart}</pre>
       </div>
     );
   }

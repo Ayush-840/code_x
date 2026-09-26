@@ -24,17 +24,9 @@ export function ArchitectureTab({ repoId }: { repoId: string }) {
 
   const arch = data.content ?? (data as unknown as Architecture);
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="section-label">01 // ARCHITECTURE</p>
-        <h2 className="section-title">Architecture Overview</h2>
-      </div>
-
-      <ArchitectureView arch={arch} />
-    </div>
-  );
+  // The heading lives inside ArchitectureView so the public analyze page
+  // renders the exact same simplified layout.
+  return <ArchitectureView arch={arch} />;
 }
 
 function LoadingState({ label }: { label?: string }) {

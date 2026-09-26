@@ -10,7 +10,7 @@ interface DeployFile {
 }
 
 /**
- * A small friendly icon per known deployment file, so the cards scan quickly.
+ * A small friendly icon per known deployment file, so the list scans quickly.
  * Mirrors the public analyze page's deployIcon — keep both in sync.
  */
 function deployIcon(path: string): string {
@@ -28,6 +28,11 @@ function deployIcon(path: string): string {
   return "📄";
 }
 
+/**
+ * Same summary-then-list shape as Architecture: a one-line intro, then each
+ * deployment file as a row in a divided list with its config preview expanding
+ * in place. The file path is already monospace — no pill chrome on top.
+ */
 export function DeploymentTab({ repoId }: { repoId: string }) {
   const api = useAuthedFetch();
   const [files, setFiles] = useState<Record<string, DeployFile> | null>(null);
@@ -48,8 +53,8 @@ export function DeploymentTab({ repoId }: { repoId: string }) {
 
   if (loading) {
     return (
-      <div className="panel flex items-center justify-center h-64">
-        <div className="flex flex-col items-center gap-3 text-lab-textMuted">
+      <div className="flex items-center justify-center h-64 text-lab-textMuted">
+        <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
           <p>Looking for deployment configs…</p>
         </div>
@@ -57,72 +62,55 @@ export function DeploymentTab({ repoId }: { repoId: string }) {
     );
   }
 
-  if (!files || Object.keys(files).length === 0) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <p className="section-label">05 // DEPLOYMENT</p>
-          <h2 className="section-title">Deployment Configuration</h2>
-        </div>
-        <div className="panel text-center py-12">
+  const entries = Object.entries(files ?? {});
+
+  return (
+    <div className="max-w-3xl">
+      <h2 className="text-2xl font-display text-white mb-1">Deployment</h2>
+      {!files || entries.length === 0 ? (
+        <div className="py-16 text-center">
           <div className="text-4xl mb-2">🚀</div>
-          <h3 className="text-lab-text font-semibold mb-1">No deployment setup found</h3>
+          <h3 className="text-white font-semibold mb-1">No deployment setup found</h3>
           <p className="text-lab-textMuted text-sm max-w-md mx-auto">
             We didn't spot anything like a Dockerfile, vercel.json, or CI workflow. If this project is deployed some other way, nothing's wrong — we just can't see it from the code.
           </p>
         </div>
-      </div>
-    );
-  }
-
-  const entries = Object.entries(files);
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="section-label">05 // DEPLOYMENT</p>
-        <h2 className="section-title">Deployment Configuration</h2>
-      </div>
-
-      <div className="panel space-y-3">
-        <p className="text-sm text-lab-textMuted">
-          Here's how this project ships — {entries.length} deployment file{entries.length !== 1 ? "s" : ""} we found
-        </p>
-        {entries.map(([path, file]) => {
-          const hasPreview = Boolean(file.preview);
-          const isOpen = expanded === path;
-          return (
-            <div key={path} className="bg-lab-card border border-lab-border rounded-lg overflow-hidden">
-              <button
-                className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-lab-blue/5 transition-colors"
-                onClick={() => setExpanded(isOpen ? null : path)}
-                aria-expanded={hasPreview ? isOpen : undefined}
-              >
-                <span className="text-base shrink-0">{deployIcon(path)}</span>
-                <code className="px-2 py-1 rounded text-sm font-mono bg-lab-bg border border-lab-border text-lab-text flex-1 truncate">
-                  {path}
-                </code>
-                <span className="px-2 py-0.5 rounded text-xs font-mono bg-lab-blueDim text-lab-blue border border-lab-blue/30 shrink-0">
-                  {file.type}
-                </span>
-                {hasPreview && (
-                  <ChevronDown
-                    className={`w-4 h-4 text-lab-textMuted transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`}
-                  />
-                )}
-              </button>
-              {hasPreview && isOpen && (
-                <div className="border-t border-lab-border px-4 py-3 bg-lab-bg">
-                  <pre className="text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap m-0 max-h-80 overflow-auto">
-                    {file.preview}
-                  </pre>
+      ) : (
+        <>
+          <p className="text-lab-textMuted text-sm mt-2 mb-6">
+            Here's how this project ships — {entries.length} deployment file{entries.length !== 1 ? "s" : ""} we found.
+          </p>
+          <div className="divide-y divide-lab-border">
+            {entries.map(([path, file]) => {
+              const hasPreview = Boolean(file.preview);
+              const isOpen = expanded === path;
+              return (
+                <div key={path} className="py-3">
+                  <button
+                    className="w-full flex items-center gap-3 text-left"
+                    onClick={() => hasPreview && setExpanded(isOpen ? null : path)}
+                    aria-expanded={hasPreview ? isOpen : undefined}
+                  >
+                    <span className="text-base shrink-0">{deployIcon(path)}</span>
+                    <code className="text-sm font-mono text-white truncate">{path}</code>
+                    <span className="text-xs text-lab-dim shrink-0 ml-auto">{file.type}</span>
+                    {hasPreview && (
+                      <ChevronDown
+                        className={`w-4 h-4 text-lab-dim shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                      />
+                    )}
+                  </button>
+                  {hasPreview && isOpen && (
+                    <pre className="mt-3 text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap max-h-80 overflow-auto">
+                      {file.preview}
+                    </pre>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

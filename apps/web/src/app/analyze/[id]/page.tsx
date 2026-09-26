@@ -392,11 +392,7 @@ export default function PublicAnalysisPage() {
         )}
 
         {activeTab === "architecture" && (
-          <div className="space-y-6">
-            <div>
-              <p className="section-label">01 // ARCHITECTURE</p>
-              <h2 className="section-title">Architecture Overview</h2>
-            </div>
+          <div>
             {archArtifact ? (
               <ArchitectureView arch={archArtifact.content as unknown as ArchitectureShape} />
             ) : (
@@ -412,16 +408,12 @@ export default function PublicAnalysisPage() {
         )}
 
         {activeTab === "deployment" && (
-          <div className="space-y-6">
-            <div>
-              <p className="section-label">05 // DEPLOYMENT</p>
-              <h2 className="section-title">How this project ships</h2>
-            </div>
+          <div>
             {deployEntries.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="max-w-3xl divide-y divide-lab-border">
                 {deployEntries.map(([path, info]) => (
-                  <div key={path} className="panel p-4">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div key={path} className="py-3">
+                    <div className="flex items-center gap-2 mb-1">
                       <span className="text-base">{deployIcon(path)}</span>
                       <code className="text-xs font-mono text-white break-all">{path}</code>
                     </div>

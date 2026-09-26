@@ -133,13 +133,9 @@ export function ChatTab({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="section-label">04 // CHAT</p>
-        <h2 className="section-title">Codebase Knowledge Assistant</h2>
-      </div>
-
+    <div className="max-w-3xl">
+      {/* No header pair above the thread — the chat window's own header bar
+          carries the title; bubbles already distinguish speakers. */}
       <div className="panel flex flex-col h-[640px] overflow-hidden">
         {/* Header bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-lab-border bg-lab-bg-raise/50">

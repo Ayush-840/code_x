@@ -24,18 +24,12 @@ interface QuestionsContent {
   questions?: Question[];
 }
 
-const CATEGORY_ICON: Record<string, string> = {
-  architecture: "🏗️", security: "🔒", performance: "⚡", testing: "🧪",
-  data: "🗄️", api: "🔌", devops: "🚀", default: "❓",
-};
-const TYPE_COLOR: Record<string, string> = {
-  exploratory: "bg-blue-500/20 text-blue-400 border-blue-500/30", adversarial: "bg-red-500/20 text-red-400 border-red-500/30",
-  debugging: "bg-amber-500/20 text-amber-400 border-amber-500/30", "trade-off": "bg-teal-500/20 text-teal-400 border-teal-500/30",
-};
-const DIFF_COLOR: Record<string, string> = {
-  junior: "bg-green-500/20 text-green-400 border-green-500/30", mid: "bg-amber-500/20 text-amber-400 border-amber-500/30", senior: "bg-red-500/20 text-red-400 border-red-500/30",
-};
-
+/**
+ * A Q&A list already has its structure in the content (question, answer), so
+ * questions render as a divided list that expands in place — no cards, no
+ * per-question borders. Difficulty is a small text tag; the answer cites its
+ * files in plain monospace text.
+ */
 export function QuestionsTab({ repoId }: { repoId: string }) {
   const api = useAuthedFetch();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -71,23 +65,24 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="section-label">03 // QUESTIONS</p>
-        <h2 className="section-title">Interview Question Bank</h2>
-      </div>
+    <div className="max-w-3xl">
+      <h2 className="text-2xl font-display text-white mb-1">Question bank</h2>
+      <p className="text-lab-textMuted text-sm mt-2 mb-6">
+        {filtered.length === questions.length
+          ? `${questions.length} questions an interviewer would ask about this codebase.`
+          : `Showing ${filtered.length} of ${questions.length} questions.`}
+      </p>
 
-      {/* Filters */}
-      <div className="panel p-4 flex flex-wrap gap-3">
+      {/* Filters — inline, no boxed toolbar */}
+      <div className="flex flex-wrap gap-2 mb-4">
         <input
-          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white placeholder-lab-dim text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
+          className="flex-1 min-w-[200px] input"
           placeholder="Search questions…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
+          className="input"
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value as Category)}
         >
@@ -95,7 +90,7 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select
-          className="px-3 py-2 rounded-lg bg-lab-card border border-lab-border text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-lab-blue/40 focus:border-transparent"
+          className="input"
           value={filterDiff}
           onChange={(e) => setFilterDiff(e.target.value as Difficulty)}
         >
@@ -106,81 +101,70 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
         </select>
       </div>
 
-      <p className="text-sm text-lab-textMuted">
-        {filtered.length === questions.length
-          ? `${questions.length} question${questions.length !== 1 ? "s" : ""} — filter or search to narrow them down`
-          : `Showing ${filtered.length} of ${questions.length} questions`}
-      </p>
-
-      <div className="panel space-y-3">
-        {filtered.map((q, i) => {
-          const key = q.id ?? `${q.category}-${i}`;
-          const isOpen = expanded === key;
-          const catIcon = CATEGORY_ICON[q.category] ?? CATEGORY_ICON.default;
-          return (
-            <div key={key} className="bg-lab-card border border-lab-border rounded-lg overflow-hidden">
-              <button
-                className="w-full flex items-start gap-3 px-4 py-4 text-left hover:bg-lab-blue/5 transition-colors"
-                onClick={() => setExpanded(isOpen ? null : key)}
-              >
-                <span className="text-2xl shrink-0 mt-0.5">{catIcon}</span>
-                <div className="flex-1 text-left">
-                  <p className="font-semibold text-white text-base leading-snug">{q.question}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {q.type && (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${TYPE_COLOR[q.type] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
-                      {q.type}
-                    </span>
-                  )}
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border ${DIFF_COLOR[q.difficulty] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-lab-textMuted py-8">No questions match those filters.</p>
+      ) : (
+        <div className="divide-y divide-lab-border">
+          {filtered.map((q, i) => {
+            const key = q.id ?? `${q.category}-${i}`;
+            const isOpen = expanded === key;
+            return (
+              <div key={key} className="py-4">
+                <button
+                  className="w-full flex items-start gap-3 text-left"
+                  onClick={() => setExpanded(isOpen ? null : key)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="flex-1 font-medium text-white leading-snug">{q.question}</span>
+                  <span className="hidden sm:inline text-[11px] font-mono text-lab-dim shrink-0 pt-1">
                     {q.difficulty}
                   </span>
                   <ChevronDown
-                    className={`w-5 h-5 text-lab-textMuted transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 shrink-0 text-lab-dim transition-transform ${isOpen ? "rotate-180" : ""}`}
                   />
-                </div>
-              </button>
+                </button>
 
-              {isOpen && q.modelAnswer && (
-                <div className="border-t border-lab-border px-4 pb-4 pt-4 space-y-4">
-                  <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Model answer</p>
-                  <p className="text-sm text-lab-textMuted leading-relaxed whitespace-pre-wrap">{q.modelAnswer}</p>
+                {isOpen && (
+                  <div className="mt-3 space-y-4">
+                    {q.modelAnswer && (
+                      <p className="text-sm text-lab-textMuted leading-relaxed whitespace-pre-wrap">
+                        {q.modelAnswer}
+                      </p>
+                    )}
 
-                  {q.citations && q.citations.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-[10px] text-lab-dim uppercase tracking-wider self-center">Grounded in:</span>
-                      {q.citations.map((c, ci) => (
-                        <span key={ci} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-lab-blueDim text-lab-blue border border-lab-blue/30">
-                          <span className="w-1 h-1 rounded-full bg-lab-blue shrink-0" />
-                          {c.filePath}:{c.startLine}–{c.endLine}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                    {q.citations && q.citations.length > 0 && (
+                      <p className="text-xs font-mono text-lab-dim">
+                        Grounded in{" "}
+                        {q.citations.map((c, ci) => (
+                          <span key={ci}>
+                            {ci > 0 && ", "}
+                            <span className="text-lab-blue">{c.filePath}:{c.startLine}–{c.endLine}</span>
+                          </span>
+                        ))}
+                      </p>
+                    )}
 
-                  {q.interviewerTip && (
-                    <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <p className="text-sm text-amber-300 leading-relaxed">
-                        <span className="font-semibold">💡 Interviewer tip: </span>
+                    {q.interviewerTip && (
+                      <p className="text-sm text-amber-300/90 leading-relaxed">
+                        <span className="font-semibold">Interviewer tip: </span>
                         {q.interviewerTip}
                       </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 function LoadingState() {
   return (
-    <div className="panel flex items-center justify-center h-64">
-      <div className="flex flex-col items-center gap-3 text-lab-textMuted">
+    <div className="flex items-center justify-center h-64 text-lab-textMuted">
+      <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
         <p>Choosing the questions an interviewer would actually ask…</p>
       </div>
@@ -190,9 +174,9 @@ function LoadingState() {
 
 function EmptyState({ error }: { error?: string }) {
   return (
-    <div className="panel text-center py-12">
+    <div className="max-w-3xl py-16 text-center">
       <div className="text-4xl mb-2">❓</div>
-      <h3 className="text-lab-text font-semibold mb-1">
+      <h3 className="text-white font-semibold mb-1">
         {error ? "We hit a snag loading the question bank" : "Question bank not ready yet"}
       </h3>
       <p className="text-lab-textMuted text-sm max-w-md mx-auto">

@@ -33,12 +33,7 @@
   @apply border-lab-blue/40;
 }
 
-/* Eyebrow label — small uppercase category label */
-.eyebrow {
-  @apply font-mono text-xs uppercase tracking-widest text-lab-textMuted;
-}
-
-/* Section label — numbered prefix + label */
+/* Section label — kept for the out-of-scope graph tab headers */
 .section-label {
   @apply font-mono text-xs uppercase tracking-wider text-lab-textMuted mb-1;
 }
@@ -48,15 +43,13 @@
   @apply font-display text-3xl sm:text-4xl text-lab-text tracking-tight;
 }
 
-/* Reveal on scroll */
-.reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+/* Hero title — simple fade-in replaces the old GSAP word-stagger reveal */
+.hero-title {
+  animation: fade-in 0.4s ease-out;
 }
-.reveal.is-visible {
-  opacity: 1;
-  transform: translateY(0);
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Custom scrollbar */
@@ -177,6 +170,15 @@ a { @apply text-lab-blue hover:underline; }
 /* Text Gradient */
 .text-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-lab-blue via-cyan-200 to-white;
+}
+
+/* Mermaid diagram — centered SVG, no extra chrome (the diagram's own theme
+   variables in MermaidDiagram.tsx handle its colors). */
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  display: block;
 }
 
 /* Progress bar */

@@ -19,6 +19,12 @@ interface Module {
   readingOrderIndex?: number | null;
 }
 
+/**
+ * Modules are sequential — a reading order, not a grid of equal tiles — so
+ * this is a numbered list separated by rules, expanding in place. Stats
+ * (files/lines/complexity) live inside the expanded body where they support
+ * the walkthrough instead of decorating the collapsed row.
+ */
 export function ModulesTab({ repoId }: { repoId: string }) {
   const api = useAuthedFetch();
   const [modules, setModules] = useState<Module[]>([]);
@@ -45,98 +51,71 @@ export function ModulesTab({ repoId }: { repoId: string }) {
   const sorted = [...modules].sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999));
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <p className="section-label">02 // MODULES</p>
-        <h2 className="section-title">Module Explanations</h2>
-      </div>
+    <div className="max-w-3xl">
+      <h2 className="text-2xl font-display text-white mb-1">Modules</h2>
+      <p className="text-lab-textMuted text-sm mt-2 mb-6">
+        {modules.length === 1
+          ? "One module — here's the walkthrough."
+          : `${modules.length} modules, in the order we'd read the codebase.`}
+      </p>
 
-      <div className="panel space-y-3">
-        <p className="text-sm text-lab-textMuted">
-          {modules.length === 1
-            ? "One module — here's the walkthrough"
-            : `${modules.length} modules · here's how we'd read the codebase, easiest first`}
-        </p>
+      <div className="divide-y divide-lab-border">
         {sorted.map((mod, i) => {
           const key = mod.id ?? mod.name;
           const isOpen = expanded === key;
           const desc = mod.purpose ?? mod.purposeSummary;
+          const stats = [
+            mod.fileCount !== undefined ? `${mod.fileCount} files` : null,
+            mod.lineCount !== undefined ? `${mod.lineCount.toLocaleString()} lines` : null,
+            mod.complexityScore != null ? `complexity ${Math.round(mod.complexityScore)}` : null,
+          ].filter(Boolean);
+
           return (
-            <div key={key} className="bg-lab-card border border-lab-border rounded-lg overflow-hidden">
-              {/* Header row */}
+            <div key={key} className="py-3">
               <button
                 onClick={() => setExpanded(isOpen ? null : key)}
-                className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-lab-blue/5 transition-colors"
+                className="w-full flex items-baseline gap-3 text-left"
+                aria-expanded={isOpen}
               >
-                <div className="flex-1 text-left">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-lab-textMuted font-bold min-w-[24px]">#{i + 1}</span>
-                    <span className="font-semibold text-white text-base">{mod.name}</span>
-                    {mod.path && (
-                      <code className="px-2 py-0.5 rounded text-xs font-mono bg-lab-bg-raise border border-lab-border text-lab-textMuted">
-                        {mod.path}
-                      </code>
-                    )}
-                  </div>
+                <span className="text-xs text-lab-dim font-mono tabular-nums w-6 shrink-0 pt-1">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="font-semibold text-white text-base">{mod.name}</span>
                   {desc && !isOpen && (
-                    <p className="text-sm text-lab-textMuted mt-1.5 line-clamp-1">{desc}</p>
+                    <span className="block text-sm text-lab-textMuted mt-0.5 line-clamp-1">{desc}</span>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {mod.fileCount !== undefined && (
-                    <span className="text-sm text-lab-textMuted">{mod.fileCount} files</span>
-                  )}
-                  {mod.lineCount !== undefined && (
-                    <span className="text-sm text-lab-textMuted">{mod.lineCount.toLocaleString()} lines</span>
-                  )}
-                  {mod.complexityScore !== null && mod.complexityScore !== undefined && (
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-mono ${
-                      mod.complexityScore > 70
-                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                        : mod.complexityScore > 40
-                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                        : "bg-green-500/20 text-green-400 border border-green-500/30"
-                    }`}>
-                      <span className="w-1 h-1 rounded-full bg-current shrink-0" />
-                      Complexity {Math.round(mod.complexityScore)}
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-5 h-5 text-lab-textMuted transition-transform ${
-                      isOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </div>
+                </span>
+                {mod.path && (
+                  <code className="hidden sm:block text-xs font-mono text-lab-dim truncate max-w-[220px] shrink-0">
+                    {mod.path}
+                  </code>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 text-lab-dim transition-transform ${isOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
-              {/* Expanded body */}
               {isOpen && (
-                <div className="border-t border-lab-border px-4 pb-4 space-y-5 pt-4">
+                <div className="pl-9 pr-1 mt-3 space-y-5">
                   {desc && (
                     <div>
-                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Purpose</p>
+                      <h4 className="text-sm font-semibold text-white mb-1">Purpose</h4>
                       <p className="text-sm text-lab-textMuted leading-relaxed">{desc}</p>
                     </div>
                   )}
                   {mod.abstractions && mod.abstractions.length > 0 && (
                     <div>
-                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Key abstractions</p>
-                      <div className="flex flex-wrap gap-2">
-                        {mod.abstractions.map((a) => (
-                          <code key={a} className="px-2 py-1 rounded text-xs font-mono bg-lab-card border border-lab-border text-lab-text">
-                            {a}
-                          </code>
-                        ))}
-                      </div>
+                      <h4 className="text-sm font-semibold text-white mb-1">Key abstractions</h4>
+                      <p className="text-sm font-mono text-lab-textMuted">{mod.abstractions.join(" · ")}</p>
                     </div>
                   )}
                   {mod.failureModes && mod.failureModes.length > 0 && (
                     <div>
-                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">Common failure modes</p>
-                      <ul className="space-y-2">
-                        {mod.failureModes.map((f, i) => (
-                          <li key={i} className="text-sm text-lab-textMuted leading-relaxed flex gap-2">
+                      <h4 className="text-sm font-semibold text-white mb-1">Common failure modes</h4>
+                      <ul className="text-sm text-lab-textMuted space-y-1.5 leading-relaxed">
+                        {mod.failureModes.map((f, j) => (
+                          <li key={j} className="flex gap-2">
                             <span className="text-red-400 shrink-0">•</span>
                             <span>{f}</span>
                           </li>
@@ -146,16 +125,19 @@ export function ModulesTab({ repoId }: { repoId: string }) {
                   )}
                   {mod.talkingPoints && mod.talkingPoints.length > 0 && (
                     <div>
-                      <p className="text-xs font-mono uppercase tracking-wider text-lab-textMuted mb-2">💡 Interview talking points</p>
-                      <ul className="space-y-2">
-                        {mod.talkingPoints.map((tp, i) => (
-                          <li key={i} className="text-sm text-lab-blue leading-relaxed flex gap-2">
+                      <h4 className="text-sm font-semibold text-white mb-1">Interview talking points</h4>
+                      <ul className="text-sm text-lab-textMuted space-y-1.5 leading-relaxed">
+                        {mod.talkingPoints.map((tp, j) => (
+                          <li key={j} className="flex gap-2">
                             <span className="text-lab-blue shrink-0">•</span>
                             <span>{tp}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
+                  )}
+                  {stats.length > 0 && (
+                    <p className="text-xs font-mono text-lab-dim">{stats.join(" · ")}</p>
                   )}
                 </div>
               )}
@@ -169,8 +151,8 @@ export function ModulesTab({ repoId }: { repoId: string }) {
 
 function LoadingState() {
   return (
-    <div className="panel flex items-center justify-center h-64">
-      <div className="flex flex-col items-center gap-3 text-lab-textMuted">
+    <div className="flex items-center justify-center h-64 text-lab-textMuted">
+      <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
         <p>Fetching your module walkthroughs…</p>
       </div>
@@ -180,9 +162,9 @@ function LoadingState() {
 
 function EmptyState({ error }: { error?: string }) {
   return (
-    <div className="panel text-center py-12">
+    <div className="max-w-3xl py-16 text-center">
       <div className="text-4xl mb-2">🧩</div>
-      <h3 className="text-lab-text font-semibold mb-1">
+      <h3 className="text-white font-semibold mb-1">
         {error ? "We hit a snag loading modules" : "No modules yet"}
       </h3>
       <p className="text-lab-textMuted text-sm max-w-md mx-auto">

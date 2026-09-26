@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
 import { isAuthenticated } from "@/lib/api";
-import { HeroReveal } from "@/components/HeroReveal";
-import { MotionLink } from "@/components/MotionLink";
 
 const FEATURES = [
   {
@@ -117,9 +114,7 @@ export default function LandingPage() {
 
         <h1 className="font-display text-5xl sm:text-7xl font-bold tracking-tight mb-6 leading-tight text-white">
           You built it.<br />
-          <HeroReveal>
-            <span className="text-gradient">Can you explain it?</span>
-          </HeroReveal>
+          <span className="hero-title text-gradient">Can you explain it?</span>
         </h1>
 
         <p className="text-lab-textMuted text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-sans">
@@ -129,13 +124,13 @@ export default function LandingPage() {
         </p>
 
         <div className="flex gap-4 justify-center flex-wrap mb-16">
-          <MotionLink href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
+          <a href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
             <span>Start with your repo</span>
             <span>→</span>
-          </MotionLink>
-          <MotionLink href="#how" className="btn btn-ghost btn-lg">
+          </a>
+          <a href="#how" className="btn btn-ghost btn-lg">
             See how it works
-          </MotionLink>
+          </a>
         </div>
 
         {/* Terminal mockup */}
@@ -147,16 +142,16 @@ export default function LandingPage() {
           </div>
           <div className="p-5 font-mono text-xs space-y-1.5 bg-black/40">
             <TerminalLine color="#8B8B9E" text="$ vibe-coder connect https://github.com/you/my-app" />
-            <TerminalLine color="#00D8FF" text="✓  Cloning repository…" delay={0.4} />
-            <TerminalLine color="#00D8FF" text="✓  AST parsing 347 files across 12 modules…" delay={0.8} />
-            <TerminalLine color="#00D8FF" text="✓  Indexing 2,841 code chunks (dense + BM25)…" delay={1.2} />
-            <TerminalLine color="#00D8FF" text="✓  Generating architecture overview…" delay={1.6} />
-            <TerminalLine color="#00D8FF" text="✓  Study guide ready. 47 interview questions generated." delay={2.0} />
-            <TerminalLine color="#F2F2F5" text='$ ask "How does authentication work?"' delay={2.5} />
+            <TerminalLine color="#00D8FF" text="✓  Cloning repository…" />
+            <TerminalLine color="#00D8FF" text="✓  AST parsing 347 files across 12 modules…" />
+            <TerminalLine color="#00D8FF" text="✓  Indexing 2,841 code chunks (dense + BM25)…" />
+            <TerminalLine color="#00D8FF" text="✓  Generating architecture overview…" />
+            <TerminalLine color="#00D8FF" text="✓  Study guide ready. 47 interview questions generated." />
+            <TerminalLine color="#F2F2F5" text='$ ask "How does authentication work?"' />
             <TerminalLine
               color="#8B8B9E"
               text={'The auth module (src/auth/middleware.ts:12-48) uses stateless JWTs…\n[src/auth/middleware.ts:12-48] [src/routes/auth.ts:31-67]'}
-              delay={3.0}
+             
             />
           </div>
         </div>
@@ -164,7 +159,6 @@ export default function LandingPage() {
 
       {/* How it works */}
       <section id="how" className="max-w-5xl mx-auto px-6 py-20 relative z-10">
-        <p className="section-label text-center">01 // WORKFLOW</p>
         <h2 className="section-title text-center mb-3">How Vibe Coder works</h2>
         <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
           Four phases. One goal: from repository to interview confidence.
@@ -184,7 +178,6 @@ export default function LandingPage() {
 
       {/* Features */}
       <section className="max-w-5xl mx-auto px-6 py-20 relative z-10">
-        <p className="section-label text-center">02 // CAPABILITIES</p>
         <h2 className="section-title text-center mb-3">Everything you need to ace the interview</h2>
         <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
           From repository connection to interview-day confidence — all in one place.
@@ -202,7 +195,6 @@ export default function LandingPage() {
 
       {/* Comparison table */}
       <section className="max-w-5xl mx-auto px-6 py-20 relative z-10">
-        <p className="section-label text-center">03 // COMPARISON</p>
         <h2 className="section-title text-center mb-3">Why Vibe Coder?</h2>
         <p className="text-lab-textMuted text-center text-sm mb-12 max-w-lg mx-auto">
           No other tool combines repository connection, interview prep, and citation grounding.
@@ -270,7 +262,7 @@ export default function LandingPage() {
   );
 }
 
-function TerminalLine({ text, color, delay = 0 }: { text: string; color: string; delay?: number }) {
+function TerminalLine({ text, color }: { text: string; color: string }) {
   return (
     <div
       style={{
@@ -278,8 +270,6 @@ function TerminalLine({ text, color, delay = 0 }: { text: string; color: string;
         fontSize: 12,
         lineHeight: 1.7,
         fontFamily: "monospace",
-        animation: `fadeUp .4s ease both`,
-        animationDelay: `${delay}s`,
         whiteSpace: "pre-wrap",
       }}
     >
