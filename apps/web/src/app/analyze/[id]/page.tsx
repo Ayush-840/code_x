@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
+import { ArchitectureView } from "@/components/tabs/ArchitectureView";
 import { CodeGraphTab, type CodeGraphData } from "@/components/CodeGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
 import type { FileEdge } from "@/lib/fileConnections";
@@ -33,6 +34,16 @@ interface Module {
 interface Artifact {
   artifactType: string;
   content: Record<string, unknown>;
+}
+
+// Minimal re-declaration of the architecture artifact shape for the public
+// page's casts. Keep in sync with ArchitectureView in components/tabs.
+interface ArchitectureShape {
+  components?: { name: string; role: string; dependsOn?: string[]; files?: number; lines?: number }[];
+  entryPoints?: (string | { path?: string; module?: string })[];
+  stack?: { languages?: Record<string, number>; frameworks?: string[] } | string[];
+  summary?: string;
+  diagram?: string;
 }
 
 interface AnalysisResult {
@@ -194,7 +205,10 @@ export default function PublicAnalysisPage() {
     );
   }
 
-  const archArtifact = result.artifacts.find((a) => a.artifactType === "architecture_overview");
+  // The generation service stores this artifact as type "architecture" (see
+  // packages/generation main.py /generate) — the old "architecture_overview"
+  // lookup never matched anything, so the tab always showed the empty state.
+  const archArtifact = result.artifacts.find((a) => a.artifactType === "architecture");
   const deployArtifact = result.artifacts.find((a) => a.artifactType === "deployment");
 
   const claimAnalysis = async () => {
@@ -318,14 +332,21 @@ export default function PublicAnalysisPage() {
         )}
 
         {activeTab === "architecture" && (
-          <div className="panel p-6 space-y-4">
-            <p className="section-label">01 // ARCHITECTURE</p>
+          <div className="space-y-6">
+            <div>
+              <p className="section-label">01 // ARCHITECTURE</p>
+              <h2 className="section-title">Architecture Overview</h2>
+            </div>
             {archArtifact ? (
-              <pre className="text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap bg-lab-bg p-4 rounded-lg border border-lab-border">
-                {JSON.stringify(archArtifact.content, null, 2)}
-              </pre>
+              <ArchitectureView arch={archArtifact.content as unknown as ArchitectureShape} />
             ) : (
-              <p className="text-lab-textMuted text-sm">No architecture overview generated.</p>
+              <div className="panel text-center py-12">
+                <div className="text-4xl mb-2">🏗️</div>
+                <h3 className="text-lab-text font-semibold mb-1">Architecture not ready yet</h3>
+                <p className="text-lab-textMuted text-sm max-w-md mx-auto">
+                  The architecture overview wasn't generated for this analysis.
+                </p>
+              </div>
             )}
           </div>
         )}
