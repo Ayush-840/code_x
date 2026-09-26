@@ -5,10 +5,13 @@ name: Post-Deploy Verification
 # FRONTEND_PREVIEW_PATTERN, COOKIE_CROSS_SITE, stale OAuth callback) is caught
 # by the repository instead of by a broken sign-in in a browser.
 #
-# This workflow deliberately has NO trigger — it must never run on push
-# (self-heal loops) or on PRs (an unmerged branch has nothing deployed yet).
-# Run it manually (workflow_dispatch) after every deploy, or schedule it —
-# see the `schedule` block (uncomment to enable).
+# It must never run on push (self-heal loops) or on PRs (an unmerged branch
+# has nothing deployed yet). It runs on workflow_dispatch (after every deploy)
+# and on a daily schedule (drift check — a red scheduled run means env vars
+# drifted; fix the vars, not the script). Scheduled runs always use the input
+# defaults below (production URLs/origins) — inputs are only settable on
+# manual dispatch. GitHub disables schedules after 60 days without repo
+# activity — the daily green run here is itself the keep-alive reminder.
 on:
   workflow_dispatch:
     inputs:
@@ -28,9 +31,10 @@ on:
         description: "Optional: callback URL copied from the GitHub App settings — enables the byte-exact redirect_uri comparison"
         required: false
         default: ""
-  # Daily drift check — uncomment to enable.
-  # schedule:
-  #   - cron: "17 6 * * *"
+  # Daily drift check at 06:17 UTC (off-peak, and the odd minute dodges
+  # the top-of-hour scheduler stampede).
+  schedule:
+    - cron: "17 6 * * *"
 
 concurrency:
   group: post-deploy-${{ github.ref }}
