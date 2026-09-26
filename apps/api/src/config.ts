@@ -55,9 +55,18 @@ export const config = {
   // MUST match that callback — send it so the authorize step and the token
   // exchange agree on the callback (both places need it). When API_URL is
   // unset, omit it and let GitHub fall back to the registered callback.
-  githubRedirectUri: process.env.API_URL
-    ? `${process.env.API_URL.trim().replace(/\/+$/, "")}/v1/auth/github/callback`
-    : null,
+  //
+  // GITHUB_REDIRECT_URI pins the full callback URL explicitly, overriding the
+  // API_URL-derived value: use it when the OAuth App's registered callback
+  // and the API's public origin genuinely differ (custom OAuth domain, a
+  // Railway domain rename where the GitHub App still points at the old URL,
+  // etc.). Trailing slashes are stripped; an empty value falls back to the
+  // API_URL derivation.
+  githubRedirectUri:
+    process.env.GITHUB_REDIRECT_URI?.trim().replace(/\/+$/, "") ||
+    (process.env.API_URL
+      ? `${process.env.API_URL.trim().replace(/\/+$/, "")}/v1/auth/github/callback`
+      : null),
   analysisServiceUrl: optionalEnv("ANALYSIS_SERVICE_URL", "http://localhost:8100"),
   retrievalServiceUrl: optionalEnv("RETRIEVAL_SERVICE_URL", "http://localhost:8200"),
   generationServiceUrl: optionalEnv("GENERATION_SERVICE_URL", "http://localhost:8300"),

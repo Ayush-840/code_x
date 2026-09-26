@@ -56,6 +56,22 @@ Follow **[BUILDING.md](BUILDING.md)** for the step-by-step build of every fronte
 
 - [ ] GitHub OAuth App callback URL = `https://<api-worker-service>.up.railway.app/v1/auth/github/callback`
 
+> **Stale Railway domain trap (causes GitHub's "redirect_uri is not associated
+> with this application" login error):** the GitHub App's callback is saved by
+> hand and never updates itself. When the `api-worker` service is recreated,
+> migrated to a new project, or its public domain is regenerated, Railway
+> issues a **new** `*.up.railway.app` domain — `API_URL` follows automatically
+> (or via `GITHUB_REDIRECT_URI`), but the GitHub App still points at the old
+> URL and **every sign-in breaks** with the mismatch error above. After any
+> Railway domain change: copy the new domain from `railway domain --service
+> api-worker` (or `railway variables --service api-worker` → `RAILWAY_PUBLIC_DOMAIN`),
+> update the callback at github.com/settings/apps (GitHub Apps) or
+> github.com/settings/developers (OAuth Apps), and save. The callback must
+> match the deployed `redirect_uri` byte-for-byte — scheme, host, path, no
+> trailing slash. Verify with:
+> `curl -s -i https://<api-worker>.up.railway.app/v1/auth/github | grep -i location`
+> → the `redirect_uri` query param must equal the registered callback exactly.
+
 ### Post-deploy verification
 
 - [ ] `GET https://<api-worker>.up.railway.app/health` → 200 (same for websocket `/health`)

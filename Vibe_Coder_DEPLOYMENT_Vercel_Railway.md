@@ -72,6 +72,7 @@ Directory set, pnpm walks up to the workspace root, so the `prebuild` hook in
 | `FRONTEND_URL` | **Every visitor-facing Vercel domain, comma-separated** — live value: `https://codex-ayush-840s-projects.vercel.app,https://codex-tau-rust.vercel.app` (see alias warning below) |
 | `FRONTEND_PREVIEW_PATTERN` | **Required for preview deployments AND per-deployment production URLs** — live value: `^https://(codex\|code)-.*-ayush-840s-projects\.vercel\.app$`. Vercel serves every production deploy at its own `code-<hash>-ayush-840s-projects.vercel.app` URL (project is `code_x` → URLs start with `code-`, while the project's aliases start with `codex-`); without those in the pattern, opening the app via a deployment URL is silently CORS-blocked and `fetch()` reports a generic network error ("Could not reach …"). Incident 2026-09-25: preview origins failed; incident 2026-09-26: deployment-specific URLs failed the same way. |
 | `API_URL` | **Public** URL of this service, e.g. `https://<api-worker>.up.railway.app` — used as the GitHub OAuth `redirect_uri`; must match the OAuth App callback exactly |
+| `GITHUB_REDIRECT_URI` | **Optional** override: pins the full OAuth callback URL instead of deriving it from `API_URL`. Use when the OAuth App's registered callback genuinely differs from the API's public origin (custom OAuth domain, Railway domain rename where the GitHub App still points at the old URL). Must match the OAuth App callback byte-for-byte |
 | `COOKIE_CROSS_SITE` | `true` (session cookies become `SameSite=None; Secure` so cross-site requests from Vercel carry them) |
 | `ANALYSIS_SERVICE_URL` | `http://python.railway.internal:8100` |
 | `RETRIEVAL_SERVICE_URL` | `http://python.railway.internal:8200` |
@@ -164,7 +165,19 @@ Vercel (`code_x`) is repo-connected: pushes to `main` auto-deploy. Fallback: `ve
 
 The GitHub OAuth App callback URL must be set to
 `https://<api-worker-service>.up.railway.app/v1/auth/github/callback`
-(github.com → Settings → Developer settings → OAuth Apps).
+(github.com → Settings → Developer settings → **GitHub Apps** for `Iv23…`
+client IDs, **OAuth Apps** for hex ones).
+
+> **Stale-domain warning:** this callback is saved by hand and never updates
+> itself. If the `api-worker` service is recreated or its public domain is
+> regenerated, Railway issues a new `*.up.railway.app` domain while the GitHub
+> App still points at the old one — every sign-in then fails with GitHub's
+> "The redirect_uri is not associated with this application" page. After any
+> domain change, re-copy the new domain into the GitHub App's callback and
+> save; it must match the deployed `redirect_uri` byte-for-byte (no trailing
+> slash, `https://`, full `/v1/auth/github/callback` path). If the OAuth
+> callback must permanently differ from `API_URL`, set the
+> `GITHUB_REDIRECT_URI` env var on api-worker instead (see the env table).
 
 ## Verification checklist (TRD §7 acceptance criteria)
 
