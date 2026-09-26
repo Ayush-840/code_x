@@ -1,7 +1,7 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { prisma } from "../db";
 import { config } from "../config";
-import { HttpError, ok } from "../middleware/errors";
+import { HttpError, ok, accepted } from "../middleware/errors";
 import { anonymousRateLimit, fileExplainRateLimit } from "../middleware/rateLimit";
 import { requireAuth, type AuthedRequest } from "../middleware/auth";
 import { createArtifact } from "@vibe-coder/database/artifacts";
@@ -131,19 +131,28 @@ async function maybeScheduleGraphRebuild(
 
 /**
  * Shared post-404 behavior for the graph-read routes: either report a rebuild
- * in flight (202) or a genuinely graph-less repo (404). Thrown as HttpError
- * so both authed and anonymous routes share one code path.
+ * in flight (202) or a genuinely graph-less repo (404). Responds directly via
+ * `accepted` — a thrown HttpError(202) reaches errorHandler after res.status
+ * has run, and Express downgrades it to 500. Throwing is reserved for the
+ * genuine-404 case, which flows through next(err) normally.
  */
-async function graphMissingResponse(repoId: string, fullName: string): Promise<never> {
+async function graphMissingResponse(
+  res: Response,
+  repoId: string,
+  fullName: string
+): Promise<void> {
   const { generating } = await maybeScheduleGraphRebuild(repoId, fullName);
   if (generating) {
-    throw new HttpError(202, "GRAPH_GENERATING", "Code graph is being generated — check back in a moment.");
+    accepted(res, "GRAPH_GENERATING", "Code graph is being generated — check back in a moment.");
+  } else {
+    throw new HttpError(
+      404,
+      "NO_GRAPH",
+      "No code graph for this repository — it has no parseable Python code."
+    );
   }
-  throw new HttpError(
-    404,
-    "NO_GRAPH",
-    "No code graph for this repository — it has no parseable Python code."
-  );
+  // Unreachable (both branches throw or respond) — satisfies the never type.
+  throw new HttpError(404, "NO_GRAPH", "No code graph for this repository.");
 }
 
 interface GraphNode {
@@ -228,7 +237,8 @@ router.get("/:repoId/graph", requireAuth, async (req: AuthedRequest, res, next) 
       ok(res, data);
     } catch (err) {
       if (err instanceof HttpError && err.code === "NO_GRAPH") {
-        await graphMissingResponse(repoId, fullName);
+        await graphMissingResponse(res, repoId, fullName);
+        return;
       }
       throw err;
     }
@@ -298,7 +308,8 @@ publicRouter.get("/:id/codegraph", anonymousRateLimit("status"), async (req, res
       ok(res, data);
     } catch (err) {
       if (err instanceof HttpError && err.code === "NO_GRAPH") {
-        await graphMissingResponse(repoId, fullName);
+        await graphMissingResponse(res, repoId, fullName);
+        return;
       }
       throw err;
     }

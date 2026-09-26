@@ -12,6 +12,16 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * Accepted-but-not-ready (the 202 pattern): ok:false + a code the client can
+ * branch on, delivered with the real 202 status. Exists because the previous
+ * path for this — throwing HttpError(202, ...) — reached errorHandler AFTER
+ * res.status() had been called elsewhere, where Express downgrades it to 500.
+ */
+export function accepted(res: Response, code: string, message: string): void {
+  fail(res, 202, code, message);
+}
+
 export function ok<T>(res: Response, data: T, status = 200): void {
   const envelope: ApiResponse<T> = {
     ok: true,
