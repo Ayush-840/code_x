@@ -178,6 +178,13 @@ client IDs, **OAuth Apps** for hex ones).
 > slash, `https://`, full `/v1/auth/github/callback` path). If the OAuth
 > callback must permanently differ from `API_URL`, set the
 > `GITHUB_REDIRECT_URI` env var on api-worker instead (see the env table).
+>
+> Post-deploy check (catches the mismatch the moment it exists):
+>
+> ```bash
+> node scripts/check-oauth-callback.mjs https://<api-worker>.up.railway.app \
+>   --callback <callback copied from the GitHub App settings>
+> ```
 
 ## Verification checklist (TRD §7 acceptance criteria)
 

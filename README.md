@@ -69,8 +69,14 @@ Follow **[BUILDING.md](BUILDING.md)** for the step-by-step build of every fronte
 > github.com/settings/developers (OAuth Apps), and save. The callback must
 > match the deployed `redirect_uri` byte-for-byte — scheme, host, path, no
 > trailing slash. Verify with:
-> `curl -s -i https://<api-worker>.up.railway.app/v1/auth/github | grep -i location`
-> → the `redirect_uri` query param must equal the registered callback exactly.
+>
+> ```bash
+> node scripts/check-oauth-callback.mjs https://<api-worker>.up.railway.app \
+>   --callback <callback copied from the GitHub App settings>
+> ```
+>
+> (or the quick grep: `curl -s -i https://<api-worker>.up.railway.app/v1/auth/github | grep -i location`
+> → the `redirect_uri` query param must equal the registered callback exactly.)
 
 ### Post-deploy verification
 
