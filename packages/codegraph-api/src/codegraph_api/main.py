@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import os
 
-from codegraph_parser import parse_repo, GraphStore
+from codegraph_parser import parse_files, parse_repo, GraphStore
 
 from codegraph_api.llm import generate_chat_answer, generate_explanation
 from codegraph_api import store
@@ -22,8 +22,11 @@ app.add_middleware(
 
 
 class ParseRequest(BaseModel):
-    repo_path: str
+    repo_path: str | None = None
     repo_id: str | None = None
+    # Cross-container flow (Railway): the worker ships file contents instead of
+    # a cloned-repo path, which is invisible outside its own container.
+    files: list[dict] | None = None
 
 
 class ChatRequest(BaseModel):
@@ -54,20 +57,32 @@ def _require_repo_id(req_repo_id: str | None) -> str:
 @app.post("/parse")
 def parse_repo_endpoint(req: ParseRequest) -> dict:
     repo_id = _require_repo_id(req.repo_id)
-    repo_path = Path(req.repo_path).resolve()
-    if not repo_path.exists():
-        raise HTTPException(status_code=400, detail=f"Path does not exist: {repo_path}")
 
-    graph_data = parse_repo(str(repo_path))
+    # Files-based flow first: in production the worker runs in a different
+    # container, so a repo_path it cloned is a path that does not exist here.
+    if req.files:
+        graph_data = parse_files(req.files)
+        repo_path = f"files:{len(req.files)}"
+    else:
+        if not req.repo_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Either files ([{path, content}, ...]) or repo_path is required.",
+            )
+        repo_path = str(Path(req.repo_path).resolve())
+        if not Path(repo_path).exists():
+            raise HTTPException(status_code=400, detail=f"Path does not exist: {repo_path}")
+        graph_data = parse_repo(repo_path)
+
     graph_store = GraphStore(graph_data)
 
-    store.save_graph(repo_id, str(repo_path), graph_store, graph_data)
+    store.save_graph(repo_id, repo_path, graph_store, graph_data)
 
     return {
         "repo_id": repo_id,
         "nodes": len(graph_data.nodes),
         "edges": len(graph_data.edges),
-        "repo_path": str(repo_path),
+        "repo_path": repo_path,
     }
 
 

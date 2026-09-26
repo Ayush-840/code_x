@@ -324,16 +324,20 @@ export async function analyzeRepo(data: AnalyzeRepoData) {
       content: { edges: parsed.fileEdges ?? [] },
     });
 
-    // 4e. CODEGRAPH PARSE (best-effort) — ask the codegraph service to parse
-    // the SAME cloned directory (no second clone) and key its graph by
-    // repoId, so /explain and /chat work for this repo immediately. An
-    // enhancement to chat/explain, not a core artifact — a failure here
-    // logs and moves on, exactly like deployment detection.
+    // 4e. CODEGRAPH PARSE (best-effort) — ask the codegraph service to build
+    // a repo-keyed graph so /explain and /chat work for this repo
+    // immediately. The service runs in a DIFFERENT container on Railway, so a
+    // local clone path is invisible to it — ship file CONTENTS (same shape as
+    // the analysis service flow above), not repo_path. The parser is
+    // Python-only today, so only *.py files are sent. An enhancement to
+    // chat/explain, not a core artifact — a failure here logs and moves on,
+    // exactly like deployment detection.
     try {
+      const pyFiles = files.filter((f) => f.path.endsWith(".py"));
       const cgRes = await fetch(`${CODEGRAPH_URL}/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo_id: repoId, repo_path: dir }),
+        body: JSON.stringify({ repo_id: repoId, files: pyFiles }),
       });
       if (!cgRes.ok) {
         const detail = await cgRes.text().catch(() => "");

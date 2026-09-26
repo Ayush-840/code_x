@@ -77,6 +77,65 @@ def parse_repo(repo_path: str) -> GraphData:
     return GraphData(nodes=nodes, edges=edges)
 
 
+def _normalize_rel_path(raw: str) -> str:
+    """Normalize a worker-supplied path to a clean repo-relative POSIX path.
+
+    These strings become node ids (never filesystem paths), but consistent
+    normalization keeps ids identical to what parse_repo would emit for the
+    same tree: no leading slash, forward slashes, '.'/'..' segments resolved.
+    """
+    parts: list[str] = []
+    for seg in raw.replace("\\", "/").split("/"):
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if parts:  # climbing above the root just clamps
+                parts.pop()
+            continue
+        parts.append(seg)
+    return "/".join(parts)
+
+
+def parse_files(files: list[dict]) -> GraphData:
+    """Parse an in-memory file list instead of a filesystem path.
+
+    The worker (Node container) and this service (Python container) are separate
+    containers in production: a cloned-repo path in the worker is invisible
+    here, which is why /parse with repo_path 400'd on every hosted analysis and
+    no graph was ever generated. The worker already ships file contents to the
+    analysis service for the same reason — accept the same shape
+    ([{path, content}, ...]) and parse it directly. Only *.py entries are
+    meaningful to the tree-sitter-python grammar; everything else is ignored,
+    and paths are normalized so node ids match what parse_repo would emit.
+    """
+    parser = Parser()
+    parser.language = PY_LANGUAGE
+
+    nodes: list[Node] = []
+    edges: list[Edge] = []
+    file_imports: dict[str, list[str]] = {}
+
+    for entry in files:
+        rel_path = _normalize_rel_path(str(entry.get("path", "")))
+        if not rel_path or not rel_path.endswith(".py"):
+            continue
+        try:
+            raw = str(entry.get("content", "")).encode("utf-8")
+        except Exception:
+            continue
+
+        tree = parser.parse(raw)
+        file_nodes, file_edges, imports = _extract_from_file(tree, raw, rel_path)
+        nodes.extend(file_nodes)
+        edges.extend(file_edges)
+        if imports:
+            file_imports[rel_path] = imports
+
+    _resolve_import_edges(nodes, edges, file_imports, Path("."))
+
+    return GraphData(nodes=nodes, edges=edges)
+
+
 def _load_gitignore(root: Path) -> pathspec.PathSpec:
     gitignore_path = root / ".gitignore"
     patterns = []
