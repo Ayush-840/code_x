@@ -1,0 +1,70 @@
+name: Post-Deploy Verification
+
+# §5 of VIBE_CODER_ENV_MATRIX.md, wired into CI: run the two post-deploy
+# smoke tests against the LIVE deployment so env-var drift (FRONTEND_URL,
+# FRONTEND_PREVIEW_PATTERN, COOKIE_CROSS_SITE, stale OAuth callback) is caught
+# by the repository instead of by a broken sign-in in a browser.
+#
+# This workflow deliberately has NO trigger — it must never run on push
+# (self-heal loops) or on PRs (an unmerged branch has nothing deployed yet).
+# Run it manually (workflow_dispatch) after every deploy, or schedule it —
+# see the `schedule` block (uncomment to enable).
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API base URL (default: production api-worker)"
+        required: false
+        default: "https://api-worker-production-a6ab.up.railway.app"
+      ws_url:
+        description: "WebSocket base URL (default: production websocket)"
+        required: false
+        default: "https://websocket-production-0a61.up.railway.app"
+      frontend_origins:
+        description: "Comma-separated visitor-facing origins to CORS-test (default: live Vercel domains)"
+        required: false
+        default: "https://codex-ayush-840s-projects.vercel.app,https://codex-tau-rust.vercel.app"
+      registered_callback:
+        description: "Optional: callback URL copied from the GitHub App settings — enables the byte-exact redirect_uri comparison"
+        required: false
+        default: ""
+  # Daily drift check — uncomment to enable.
+  # schedule:
+  #   - cron: "17 6 * * *"
+
+concurrency:
+  group: post-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: OAuth + CORS/cookie smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OAuth callback health check
+        # Optional input: the callback copied from the GitHub App settings.
+        # When empty, the script still verifies the API is up and that the
+        # redirect_uri it sends is self-consistent (see the script's header).
+        run: |
+          if [ -n "${{ github.event.inputs.registered_callback || '' }}" ]; then
+            node scripts/check-oauth-callback.mjs "${{ github.event.inputs.api_url }}" \
+              --callback "${{ github.event.inputs.registered_callback }}"
+          else
+            node scripts/check-oauth-callback.mjs "${{ github.event.inputs.api_url }}"
+          fi
+
+      - name: Run CORS + cookie smoke test
+        # Pass every visitor-facing origin — a missing domain here is exactly
+        # the silent CORS-block this check exists to catch.
+        run: |
+          ORIGINS=""
+          IFS=',' read -ra ORIGIN_ARRAY <<< "${{ github.event.inputs.frontend_origins }}"
+          for o in "${ORIGIN_ARRAY[@]}"; do
+            ORIGINS="$ORIGINS --origin $(echo "$o" | xargs)"
+          done
+          node scripts/check-prod-cors.mjs "${{ github.event.inputs.api_url }}" \
+            $ORIGINS \
+            --ws "${{ github.event.inputs.ws_url }}"

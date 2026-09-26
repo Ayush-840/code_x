@@ -82,8 +82,16 @@ pnpm check:prod https://<api-worker>.up.railway.app \
   --ws https://<websocket>.up.railway.app
 ```
 
-Both exit `0` only when everything passes — wire them into the post-deploy
-checklist (or CI) so drift is caught before users hit it.
+Both exit `0` only when everything passes. These run in CI via the
+**Post-Deploy Verification** workflow
+(`.github/workflows/post-deploy.yml`) — trigger it from the Actions tab after
+every deploy (Actions → Post-Deploy Verification → Run workflow; the defaults
+are the live URLs and origins, override to test a different deployment). It
+runs on `workflow_dispatch` only — never on push or PRs, since an unmerged
+branch has nothing deployed and a re-deploying run would page itself.
+
+Wire them into the post-deploy checklist so drift is caught before users hit
+it — and CI red means fix the env vars, not the script.
 
 Manual fallbacks when the scripts are unavailable:
 
