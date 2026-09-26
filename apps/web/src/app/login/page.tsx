@@ -51,9 +51,12 @@ function LoginContent() {
       <div style={S.page}>
         <div className="gradient-bg" />
         <div className="glass fade-up" style={S.card}>
-          <h1 style={S.h1}>Authentication Error</h1>
-          <p style={{ ...S.p, marginBottom: 16 }}>{errorMsg ?? "Failed to authenticate."}</p>
-          <a href="/login" style={{ ...S.githubBtn, textDecoration: "none" }}>Try Again</a>
+          <h1 style={S.h1}>That didn't go through</h1>
+          <p style={{ ...S.p, marginBottom: 8 }}>{errorMsg ?? "We couldn't sign you in."}</p>
+          <p style={{ ...S.p, marginBottom: 16, fontSize: 13, color: "var(--text-muted)" }}>
+            This is usually temporary — one more try usually does it.
+          </p>
+          <a href="/login" style={{ ...S.githubBtn, textDecoration: "none" }}>Try again</a>
         </div>
       </div>
     );
@@ -73,7 +76,7 @@ function LoginContent() {
       <div className="glass fade-up" style={S.card}>
         <div style={S.cardHeader}>
           <h1 style={S.h1}>Welcome back</h1>
-          <p style={S.p}>Sign in with GitHub to access your interview prep dashboard.</p>
+          <p style={S.p}>Sign in with GitHub and we'll help you truly understand your codebase — not just skim it.</p>
         </div>
 
         <hr style={S.divider} />
@@ -88,14 +91,14 @@ function LoginContent() {
         </a>
 
         <p style={S.note}>
-          By signing in you agree to our Terms of Service. We request read-only access to your repositories.
+          We only ask for read-only access to your repositories. By signing in you agree to our Terms of Service.
         </p>
 
         <div style={S.steps}>
           {[
-            { n: "1", t: "Connect a repo", d: "Paste any GitHub URL and your PAT" },
-            { n: "2", t: "AI analyzes it",  d: "AST parsing + hybrid retrieval indexing" },
-            { n: "3", t: "Prep for interviews", d: "Chat, question bank, mock interviews" },
+            { n: "1", t: "Connect a repo", d: "Paste any public GitHub URL" },
+            { n: "2", t: "We read the code",  d: "Architecture, modules, and how it all fits together" },
+            { n: "3", t: "Prep with confidence", d: "Ask questions, get quizzed, run mock interviews" },
           ].map(s => (
             <div key={s.n} style={S.step}>
               <div style={S.stepNum}>{s.n}</div>

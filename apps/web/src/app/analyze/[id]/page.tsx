@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { publicGet, publicPost, ApiError } from "@/lib/publicApi";
 import { FileGraphTab } from "@/components/FileGraphTab";
+import { friendlyStage } from "@/lib/stages";
 import { ArchitectureView } from "@/components/tabs/ArchitectureView";
 import { CodeGraphTab, type CodeGraphData } from "@/components/CodeGraphTab";
 import type { FileTreeNode } from "@/components/FileGraph";
@@ -218,17 +219,6 @@ export default function PublicAnalysisPage() {
   if (!result || result.status !== "READY") {
     const pct = result?.job?.progress ?? 0;
     const stage = result?.job?.stage ?? "QUEUED";
-    // Plain-language version of each pipeline stage, so visitors know what's
-    // actually happening instead of decoding worker jargon. The raw stage
-    // stays below as a small mono detail for those who want it.
-    const stageCopy: Record<string, string> = {
-      QUEUED: "Getting in line…",
-      CLONING: "Downloading the repository from GitHub…",
-      PARSING: "Reading the code and mapping out modules…",
-      CHUNKING: "Indexing the code so you can ask questions about it…",
-      EMBEDDING: "Finishing the index…",
-      GENERATING: "Writing your guides — architecture, module walkthroughs, questions…",
-    };
     return (
       <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans flex items-center justify-center">
         <div className="max-w-md w-full mx-auto py-24 px-6 text-center">
@@ -237,7 +227,7 @@ export default function PublicAnalysisPage() {
             Taking a look at {result?.fullName ?? "your repository"}…
           </h2>
           <p className="text-lab-textMuted text-sm mb-4 min-h-[20px]">
-            {stageCopy[stage] ?? "Working through the codebase…"}
+            {friendlyStage(stage)}
           </p>
           <div className="w-full h-1.5 bg-lab-border rounded-full overflow-hidden">
             <div className="h-full bg-lab-blue transition-all duration-300" style={{ width: `${pct}%` }} />

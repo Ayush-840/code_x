@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthRedirect } from "@/components/auth";
 import { useAuthedFetch, logout as apiLogout } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
+import { friendlyStage } from "@/lib/stages";
 import { RepoConnectForm } from "@/components/RepoConnectForm";
 
 interface Repository {
@@ -147,12 +148,12 @@ export default function DashboardPage() {
         {/* Connect form */}
         <div className="card" style={{ marginBottom: 32 }}>
           <h2 style={S.cardTitle}>Connect a new repository</h2>
-          <p style={S.cardSub}>Paste a GitHub URL and your Personal Access Token to start analysis.</p>
+          <p style={S.cardSub}>Paste a GitHub URL and a personal access token — we'll do the rest.</p>
           {usage && usage.reposRemaining > 0 ? (
             <RepoConnectForm onConnected={onConnected} />
           ) : (
             <p style={{ color: "var(--text-muted)", marginTop: 12 }}>
-              Repo limit reached for your plan. Delete a repo to free up quota.
+              You've used all your repos on this plan. Delete one below to make room — your study guides stay until you do.
             </p>
           )}
         </div>
@@ -163,7 +164,7 @@ export default function DashboardPage() {
           <div className="empty-state">
             <div className="empty-icon">📂</div>
             <h3>No repositories yet</h3>
-            <p>Connect a GitHub repository above to generate your study guide.</p>
+            <p>Paste a GitHub repo above and we'll turn it into a study guide — architecture walkthrough, module explanations, and interview questions.</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -198,7 +199,9 @@ function UsageTile({ icon, label, used, remaining }: { icon: string; label: stri
       <div className="progress-track">
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{left} remaining</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        {left === 0 ? "All used — you're on a roll" : `${left} left`}
+      </div>
     </div>
   );
 }
@@ -243,13 +246,17 @@ function RepoCard({ repo, progress, onAnalyze }: { repo: Repository; progress?: 
       {isActive ? (
         <div style={{ width: 280 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
-            <span style={{ color: "var(--brand-400)", fontWeight: 600 }}>{progress.stage}</span>
+            <span style={{ color: "var(--brand-400)", fontWeight: 600 }}>
+              {friendlyStage(progress.stage).replace(/…$/, "")}
+            </span>
             <span style={{ color: "var(--text-muted)" }}>{progress.progress}%</span>
           </div>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${progress.progress}%` }} />
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{progress.message}</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            {progress.message || "This updates live — no need to refresh."}
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -273,7 +280,7 @@ function RepoCard({ repo, progress, onAnalyze }: { repo: Repository; progress?: 
                 onClick={handleAnalyze}
               >
                 {analyzing ? <span className="spinner" style={{ width: 14, height: 14 }} /> : null}
-                {repo.status === "FAILED" ? "Retry" : "Analyze"}
+                {repo.status === "FAILED" ? "Try again" : "Analyze"}
               </button>
             </>
           )}
