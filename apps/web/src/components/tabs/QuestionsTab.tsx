@@ -107,7 +107,9 @@ export function QuestionsTab({ repoId }: { repoId: string }) {
       </div>
 
       <p className="text-sm text-lab-textMuted">
-        Showing {filtered.length} of {questions.length} questions
+        {filtered.length === questions.length
+          ? `${questions.length} question${questions.length !== 1 ? "s" : ""} — filter or search to narrow them down`
+          : `Showing ${filtered.length} of ${questions.length} questions`}
       </p>
 
       <div className="panel space-y-3">
@@ -180,7 +182,7 @@ function LoadingState() {
     <div className="panel flex items-center justify-center h-64">
       <div className="flex flex-col items-center gap-3 text-lab-textMuted">
         <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
-        <p>Loading question bank…</p>
+        <p>Choosing the questions an interviewer would actually ask…</p>
       </div>
     </div>
   );
@@ -190,9 +192,13 @@ function EmptyState({ error }: { error?: string }) {
   return (
     <div className="panel text-center py-12">
       <div className="text-4xl mb-2">❓</div>
-      <h3 className="text-lab-text font-semibold mb-1">Question bank not ready</h3>
-      <p className="text-lab-textMuted text-sm">
-        {error ? `Error: ${error}` : "Run analysis to auto-generate interview questions."}
+      <h3 className="text-lab-text font-semibold mb-1">
+        {error ? "We hit a snag loading the question bank" : "Question bank not ready yet"}
+      </h3>
+      <p className="text-lab-textMuted text-sm max-w-md mx-auto">
+        {error
+          ? `${error} — a refresh usually does it. If not, re-run the analysis.`
+          : "Once the analysis finishes, we'll build you a question bank grounded in this exact codebase — with model answers and interviewer tips."}
       </p>
     </div>
   );

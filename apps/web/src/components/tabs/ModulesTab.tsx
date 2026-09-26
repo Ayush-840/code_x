@@ -54,7 +54,9 @@ export function ModulesTab({ repoId }: { repoId: string }) {
 
       <div className="panel space-y-3">
         <p className="text-sm text-lab-textMuted">
-          {modules.length} module{modules.length !== 1 ? "s" : ""} detected · reading order
+          {modules.length === 1
+            ? "One module — here's the walkthrough"
+            : `${modules.length} modules · here's how we'd read the codebase, easiest first`}
         </p>
         {sorted.map((mod, i) => {
           const key = mod.id ?? mod.name;
@@ -170,7 +172,7 @@ function LoadingState() {
     <div className="panel flex items-center justify-center h-64">
       <div className="flex flex-col items-center gap-3 text-lab-textMuted">
         <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin" />
-        <p>Loading modules…</p>
+        <p>Fetching your module walkthroughs…</p>
       </div>
     </div>
   );
@@ -180,9 +182,13 @@ function EmptyState({ error }: { error?: string }) {
   return (
     <div className="panel text-center py-12">
       <div className="text-4xl mb-2">🧩</div>
-      <h3 className="text-lab-text font-semibold mb-1">No modules yet</h3>
-      <p className="text-lab-textMuted text-sm">
-        {error ? `Error: ${error}` : "Run the analysis pipeline to generate module explanations."}
+      <h3 className="text-lab-text font-semibold mb-1">
+        {error ? "We hit a snag loading modules" : "No modules yet"}
+      </h3>
+      <p className="text-lab-textMuted text-sm max-w-md mx-auto">
+        {error
+          ? `${error} — a refresh usually does it. If not, re-run the analysis below.`
+          : "Run the analysis pipeline and we'll break the codebase into modules with a suggested reading order."}
       </p>
     </div>
   );
