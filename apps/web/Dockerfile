@@ -13,6 +13,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/database/node_modules ./packages/database/node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
+# NEXT_PUBLIC_* are inlined into the client bundle at BUILD time, so they must
+# be present during `next build` — runtime env has no effect on them. Without
+# these the production build fails its guard (resolveApiUrl/resolveWsUrl).
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ARG NEXT_PUBLIC_WS_URL=http://localhost:4001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 RUN corepack enable && pnpm --filter @vibe-coder/database exec prisma generate
 RUN pnpm --filter @vibe-coder/web build
 

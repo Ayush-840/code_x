@@ -26,13 +26,19 @@ export default defineRailway(() => {
       restartPolicyMaxRetries: 3,
     },
     replicas: { "sfo": 1 },
-    env: { ANALYSIS_SERVICE_URL: preserve(), API_URL: preserve(), CODEGRAPH_SERVICE_URL: preserve(), COOKIE_CROSS_SITE: preserve(), DATABASE_URL: preserve(), FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), GITHUB_CLIENT_ID: preserve(), GITHUB_CLIENT_SECRET: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), NODE_ENV: preserve(), PORT: preserve(), REDIS_URL: preserve(), RETRIEVAL_SERVICE_URL: preserve() },
+    // FRONTEND_PREVIEW_PATTERN is set live (per-deploy code-<hash>-… Vercel URLs
+    // must pass CORS) — declaring it here keeps `railway config apply` from
+    // silently dropping it and re-breaking CORS for deployment URLs.
+    env: { ANALYSIS_SERVICE_URL: preserve(), API_URL: preserve(), CODEGRAPH_SERVICE_URL: preserve(), COOKIE_CROSS_SITE: preserve(), DATABASE_URL: preserve(), FRONTEND_PREVIEW_PATTERN: preserve(), FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), GITHUB_CLIENT_ID: preserve(), GITHUB_CLIENT_SECRET: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), NODE_ENV: preserve(), PORT: preserve(), REDIS_URL: preserve(), RETRIEVAL_SERVICE_URL: preserve() },
   });
   const websocket = service("websocket", {
     build: { builder: "DOCKERFILE", dockerfilePath: "apps/websocket/Dockerfile" },
     deploy: { healthcheckPath: "/health", healthcheckTimeout: 300, restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 3 },
     replicas: { "sfo": 1 },
-    env: { FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), PORT: preserve(), REDIS_URL: preserve() },
+    // FRONTEND_PREVIEW_PATTERN: same value as api-worker — without it every
+    // per-deploy production URL (code-<hash>-…) is silently CORS-blocked on
+    // the socket connection and live updates never arrive.
+    env: { FRONTEND_PREVIEW_PATTERN: preserve(), FRONTEND_URL: preserve(), GENERATION_SERVICE_URL: preserve(), JWT_SECRET: preserve(), MOCK_INTERVIEW_SERVICE_URL: preserve(), PORT: preserve(), REDIS_URL: preserve() },
   });
 
   return project("code-x", {

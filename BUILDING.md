@@ -40,6 +40,10 @@ Reference docs already in this repo:
    - [B4. Chat UI with Streaming](#b4-chat-ui-with-streaming)
    - [B5. Mock-Interview UI](#b5-mock-interview-ui)
 6. [Part C — Run Everything Locally](#part-c--run-everything-locally)
+   - [C1. Infrastructure containers](#c1-infrastructure-containers)
+   - [C2. Environment variables](#c2-environment-variables)
+   - [C2.1 GitHub OAuth App for local dev (fixes "redirect_uri is not associated")](#c21-github-oauth-app-for-local-dev-fixes-redirect_uri-is-not-associated)
+   - [C3. Boot order](#c3-boot-order)
 7. [Environment Variables Reference](#7-environment-variables-reference)
 8. [Seed Data](#8-seed-data)
 9. [Testing & Verification](#9-testing--verification)
@@ -91,7 +95,7 @@ Install these first. Versions matter.
 | Poetry | 1.7+ | Python dependency management |
 | Docker Desktop | 4.24+ | Postgres, Redis, OpenSearch, local `docker compose` |
 | GitHub account + read-only PAT | — | Cloning public repos locally during dev |
-| GitHub **OAuth App** | — | Login flow (client id + client secret) |
+| GitHub **OAuth App** | — | Login flow (client id + client secret). Set up in §C2.1 — a callback mismatch breaks sign-in with "redirect_uri is not associated with this application" |
 | OpenAI API key (optional in dev) | — | LLM calls. A stub works for offline development. |
 | Pinecone account / index (optional) | — | Dense vectors. `pgvector` works as a free fallback. |
 
@@ -2830,6 +2834,60 @@ NEXT_PUBLIC_WS_URL="http://localhost:4001"
 API_URL="http://localhost:4000"
 ```
 
+### C2.1 GitHub OAuth App for local dev (fixes "redirect_uri is not associated")
+
+Sign-in breaks with GitHub's **"The redirect_uri is not associated with this
+application"** page when the `redirect_uri` the API sends does not equal the
+Callback URL saved on the GitHub OAuth App. Locally the API sends exactly
+
+```
+http://localhost:4000/v1/auth/github/callback
+```
+
+(derived from `API_URL=http://localhost:4000` in `apps/api/src/config.ts`), so
+that exact URL must be registered on the app.
+
+Create the dev app:
+
+1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**
+   (<https://github.com/settings/developers>).
+2. Fill in:
+   - **Application name**: `Vibe Coder dev`
+   - **Homepage URL**: `http://localhost:3000`
+   - **Callback URL**: `http://localhost:4000/v1/auth/github/callback` —
+     byte-for-byte: `http://`, port `4000`, the full
+     `/v1/auth/github/callback` path, no trailing slash.
+3. Register, then copy the **Client ID** and generate a **Client Secret** into
+   `.env`:
+
+   ```bash
+   GITHUB_CLIENT_ID="<client id>"
+   GITHUB_CLIENT_SECRET="<client secret>"
+   API_URL="http://localhost:4000"   # already the dev default — keep it matching
+   ```
+
+4. Restart `apps/api` so it picks up the new values, then verify what the API
+   actually sends **before** clicking "Continue with GitHub":
+
+   ```bash
+   node scripts/check-oauth-callback.mjs http://localhost:4000
+   # every check must pass — the redirect_uri line must print the callback URL
+   ```
+
+Then sign in from `http://localhost:3000` → GitHub authorize → redirected back
+to `/login?authenticated=1` → dashboard.
+
+> **Production uses a different callback.** The live app points at
+> `https://<api-worker>.up.railway.app/v1/auth/github/callback`, so you need a
+> **second** OAuth App for dev (a GitHub App can register both callbacks;
+> a classic OAuth App only one). Never repoint the production app's callback
+> at localhost to "fix" dev — that breaks sign-in for every user.
+>
+> **Debugging production:** after a Railway domain change the app still points
+> at the old URL and every sign-in fails with this exact error. Re-copy the new
+> domain into the app's Callback URL and save — see the "Stale Railway domain
+> trap" note in README.md and `scripts/check-oauth-callback.mjs`.
+
 ## C3. Boot order
 
 ```bash
@@ -2885,7 +2943,7 @@ curl http://localhost:8400/health
 | `PINECONE_API_KEY` / `PINECONE_INDEX` | retrieval | no | `pgvector` fallback otherwise |
 | `OPENSEARCH_URL` | retrieval | yes (indexing) | Default `http://localhost:9200` |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | api | no | Skip in dev |
-| `FRONTEND_URL` / `API_URL` | api (OAuth redirect) | no | Dev defaults |
+| `FRONTEND_URL` / `API_URL` | api (OAuth redirect) | no | Dev defaults. `API_URL` is sent as the OAuth `redirect_uri` — it must match the OAuth App callback (§C2.1) |
 
 ---
 

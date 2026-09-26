@@ -11,6 +11,8 @@
     "lint": "pnpm -r lint",
     "audit:gate": "bash scripts/audit-gate.sh",
     "typecheck": "pnpm -r typecheck",
+    "check:oauth": "node scripts/check-oauth-callback.mjs",
+    "check:prod": "node scripts/check-prod-cors.mjs",
     "db:generate": "pnpm --filter @vibe-coder/database prisma generate",
     "db:migrate": "pnpm --filter @vibe-coder/database prisma migrate dev --name init",
     "db:seed": "pnpm --filter @vibe-coder/database prisma db seed"
