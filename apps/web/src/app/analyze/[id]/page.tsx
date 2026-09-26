@@ -46,6 +46,32 @@ interface ArchitectureShape {
   diagram?: string;
 }
 
+// Deployment artifact shape written by the worker's detectDeployment():
+// { [repoRelativePath]: { type: "file" | "directory", preview?: string } }.
+interface DeployEntryInfo {
+  type?: string;
+  preview?: string;
+}
+
+/**
+ * A small friendly icon per known deployment file, so the cards scan quickly.
+ * Falls back to a neutral 📄 for anything unrecognized.
+ */
+function deployIcon(path: string): string {
+  const base = path.split("/").pop()?.toLowerCase() ?? "";
+  if (base.includes("dockerfile") || base.includes("docker")) return "🐳";
+  if (base.startsWith("vercel")) return "▲";
+  if (base.includes("railway")) return "🚄";
+  if (base.includes("render")) return "🎨";
+  if (base.includes("netlify")) return "🌐";
+  if (base.includes("fly")) return "🪰";
+  if (base.includes("terraform") || base.endsWith(".tf")) return "🏗️";
+  if (base.includes("workflow") || path.includes(".github")) return "⚙️";
+  if (base.includes("k8s") || base.includes("kube")) return "☸️";
+  if (base === "makefile") return "🛠️";
+  return "📄";
+}
+
 interface AnalysisResult {
   id: string;
   fullName: string;
@@ -142,9 +168,14 @@ export default function PublicAnalysisPage() {
     return (
       <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">
         <div className="max-w-xl mx-auto py-32 px-6 text-center">
-          <div className="text-5xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2 text-white">Analysis not found</h2>
-          <p className="text-lab-textMuted text-sm">{error}</p>
+          <div className="text-5xl mb-4">🔍</div>
+          <h2 className="text-xl font-bold mb-2 text-white">We couldn't find that analysis</h2>
+          <p className="text-lab-textMuted text-sm">
+            {error}
+          </p>
+          <p className="text-lab-textMuted text-xs mt-2 max-w-md mx-auto">
+            The link may have expired — anonymous analyses stick around for 7 days — or the URL may be off by a character.
+          </p>
           <a href="/analyze" className="mt-6 inline-block px-4 py-2 bg-lab-blue text-black font-semibold rounded-lg hover:bg-lab-blue/80 transition-colors">
             Analyze another repo
           </a>
@@ -156,15 +187,15 @@ export default function PublicAnalysisPage() {
   if (result?.status === "FAILED") {
     const category = result.job?.errorCategory ?? "SYSTEM_ERROR";
     const messages: Record<string, string> = {
-      NOT_FOUND: "This repository couldn't be found. Double-check the URL — it must point to a public GitHub repo.",
-      RATE_LIMITED: "GitHub's rate limit was hit. Wait a few minutes and try again — or sign in for a higher limit.",
-      SYSTEM_ERROR: "Something went wrong on our end. Your repo URL was fine — please try again in a bit.",
+      NOT_FOUND: "We couldn't find that repository. Double-check the URL — it needs to point to a public GitHub repo.",
+      RATE_LIMITED: "We briefly hit GitHub's rate limit. Give it a few minutes and try again — or sign in for a higher limit.",
+      SYSTEM_ERROR: "Something hiccuped on our end — your link was fine. Please try again in a moment.",
     };
     return (
       <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans">
         <div className="max-w-xl mx-auto py-32 px-6 text-center">
-          <div className="text-5xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2 text-white">Analysis failed</h2>
+          <div className="text-5xl mb-4">😅</div>
+          <h2 className="text-xl font-bold mb-2 text-white">We hit a snag</h2>
           <p className="text-lab-textMuted text-sm max-w-md mx-auto mb-4">
             {messages[category] ?? messages.SYSTEM_ERROR}
           </p>
@@ -177,7 +208,7 @@ export default function PublicAnalysisPage() {
             </details>
           )}
           <a href="/analyze" className="inline-block px-4 py-2 bg-lab-blue text-black font-semibold rounded-lg hover:bg-lab-blue/80 transition-colors">
-            Try another repo
+            Try again
           </a>
         </div>
       </div>
@@ -187,19 +218,33 @@ export default function PublicAnalysisPage() {
   if (!result || result.status !== "READY") {
     const pct = result?.job?.progress ?? 0;
     const stage = result?.job?.stage ?? "QUEUED";
+    // Plain-language version of each pipeline stage, so visitors know what's
+    // actually happening instead of decoding worker jargon. The raw stage
+    // stays below as a small mono detail for those who want it.
+    const stageCopy: Record<string, string> = {
+      QUEUED: "Getting in line…",
+      CLONING: "Downloading the repository from GitHub…",
+      PARSING: "Reading the code and mapping out modules…",
+      CHUNKING: "Indexing the code so you can ask questions about it…",
+      EMBEDDING: "Finishing the index…",
+      GENERATING: "Writing your guides — architecture, module walkthroughs, questions…",
+    };
     return (
       <div className="bg-lab-bg text-lab-text min-h-screen relative font-sans flex items-center justify-center">
         <div className="max-w-md w-full mx-auto py-24 px-6 text-center">
           <div className="w-8 h-8 border-2 border-lab-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2 text-white font-display tracking-wide">
-            Analyzing {result?.fullName ?? "repository"}…
+            Taking a look at {result?.fullName ?? "your repository"}…
           </h2>
-          <p className="text-lab-textMuted text-sm font-mono mb-4">
-            {stage} — {pct}%
+          <p className="text-lab-textMuted text-sm mb-4 min-h-[20px]">
+            {stageCopy[stage] ?? "Working through the codebase…"}
           </p>
           <div className="w-full h-1.5 bg-lab-border rounded-full overflow-hidden">
             <div className="h-full bg-lab-blue transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
+          <p className="text-[11px] text-lab-dim font-mono mt-3">
+            {stage} · {pct}% — usually done in under a minute. This page updates itself.
+          </p>
         </div>
       </div>
     );
@@ -210,6 +255,17 @@ export default function PublicAnalysisPage() {
   // lookup never matched anything, so the tab always showed the empty state.
   const archArtifact = result.artifacts.find((a) => a.artifactType === "architecture");
   const deployArtifact = result.artifacts.find((a) => a.artifactType === "deployment");
+
+  // The deployment artifact is an always-written map (empty = "nothing found");
+  // flatten it once for the cards. Keyed on the artifact reference so the 3s
+  // status poll doesn't recompute this after READY.
+  const deployEntries = useMemo(
+    () =>
+      Object.entries(
+        (deployArtifact?.content ?? {}) as Record<string, DeployEntryInfo>
+      ),
+    [deployArtifact]
+  );
 
   const claimAnalysis = async () => {
     try {
@@ -285,37 +341,51 @@ export default function PublicAnalysisPage() {
           >
         {activeTab === "modules" && (
           <div className="space-y-4">
-            <p className="text-xs font-mono text-lab-textMuted uppercase tracking-wider">
-              {result.modules.length} module{result.modules.length !== 1 ? "s" : ""} · reading order
+            <p className="text-sm text-lab-textMuted">
+              {result.modules.length === 0
+                ? "Nothing here yet"
+                : result.modules.length === 1
+                  ? "Here's the one module we found, in suggested reading order"
+                  : `Here's how we'd read the codebase — ${result.modules.length} modules, easiest first`}
             </p>
-            <div className="space-y-3">
-              {result.modules
-                .slice()
-                .sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999))
-                .map((mod, i) => (
-                  <div key={mod.id ?? mod.name} className="panel p-4">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <span className="text-xs font-mono text-lab-blue font-bold min-w-[20px]">
-                        #{i + 1}
-                      </span>
-                      <span className="font-semibold text-white text-base">{mod.name}</span>
-                      {mod.path && (
-                        <code className="px-2 py-0.5 rounded text-xs font-mono bg-lab-bg border border-lab-border text-lab-textMuted">
-                          {mod.path}
-                        </code>
+            {result.modules.length === 0 ? (
+              <div className="panel text-center py-12">
+                <div className="text-4xl mb-2">🧩</div>
+                <h3 className="text-lab-text font-semibold mb-1">No modules detected</h3>
+                <p className="text-lab-textMuted text-sm max-w-md mx-auto">
+                  We couldn't pick out distinct modules for this repository — it may be very small, or in a language we don't fully support yet. The other tabs may still have useful detail.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {result.modules
+                  .slice()
+                  .sort((a, b) => (a.readingOrderIndex ?? 999) - (b.readingOrderIndex ?? 999))
+                  .map((mod, i) => (
+                    <div key={mod.id ?? mod.name} className="panel p-4">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <span className="text-xs font-mono text-lab-blue font-bold min-w-[20px]">
+                          #{i + 1}
+                        </span>
+                        <span className="font-semibold text-white text-base">{mod.name}</span>
+                        {mod.path && (
+                          <code className="px-2 py-0.5 rounded text-xs font-mono bg-lab-bg border border-lab-border text-lab-textMuted">
+                            {mod.path}
+                          </code>
+                        )}
+                        <span className="ml-auto text-xs font-mono text-lab-textMuted">
+                          {mod.fileCount} file{mod.fileCount === 1 ? "" : "s"} · {(mod.lineCount ?? 0).toLocaleString()} line{(mod.lineCount ?? 0) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {mod.purposeSummary && (
+                        <p className="text-xs text-lab-textMuted leading-relaxed pl-7">
+                          {mod.purposeSummary}
+                        </p>
                       )}
-                      <span className="ml-auto text-xs font-mono text-lab-textMuted">
-                        {mod.fileCount} files · {mod.lineCount?.toLocaleString()} lines
-                      </span>
                     </div>
-                    {mod.purposeSummary && (
-                      <p className="text-xs text-lab-textMuted leading-relaxed pl-7">
-                        {mod.purposeSummary}
-                      </p>
-                    )}
-                  </div>
-                ))}
-            </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -344,7 +414,7 @@ export default function PublicAnalysisPage() {
                 <div className="text-4xl mb-2">🏗️</div>
                 <h3 className="text-lab-text font-semibold mb-1">Architecture not ready yet</h3>
                 <p className="text-lab-textMuted text-sm max-w-md mx-auto">
-                  The architecture overview wasn't generated for this analysis.
+                  The overview didn't come through with this analysis — the other tabs still have the full picture of the codebase.
                 </p>
               </div>
             )}
@@ -352,14 +422,35 @@ export default function PublicAnalysisPage() {
         )}
 
         {activeTab === "deployment" && (
-          <div className="panel p-6 space-y-4">
-            <p className="section-label">05 // DEPLOYMENT</p>
-            {deployArtifact ? (
-              <pre className="text-xs font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap bg-lab-bg p-4 rounded-lg border border-lab-border">
-                {JSON.stringify(deployArtifact.content, null, 2)}
-              </pre>
+          <div className="space-y-6">
+            <div>
+              <p className="section-label">05 // DEPLOYMENT</p>
+              <h2 className="section-title">How this project ships</h2>
+            </div>
+            {deployEntries.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {deployEntries.map(([path, info]) => (
+                  <div key={path} className="panel p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-base">{deployIcon(path)}</span>
+                      <code className="text-xs font-mono text-white break-all">{path}</code>
+                    </div>
+                    {info.preview && (
+                      <pre className="text-[11px] font-mono text-lab-textMuted leading-relaxed whitespace-pre-wrap bg-lab-bg p-3 rounded-lg border border-lab-border max-h-40 overflow-auto mt-2">
+                        {info.preview}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
-              <p className="text-lab-textMuted text-sm">No deployment configuration detected.</p>
+              <div className="panel text-center py-12">
+                <div className="text-4xl mb-2">🚀</div>
+                <h3 className="text-lab-text font-semibold mb-1">No deployment setup found</h3>
+                <p className="text-lab-textMuted text-sm max-w-md mx-auto">
+                  We didn't spot anything like a Dockerfile, vercel.json, or CI workflow. If this project is deployed some other way, nothing's wrong — we just can't see it from the code.
+                </p>
+              </div>
             )}
           </div>
         )}

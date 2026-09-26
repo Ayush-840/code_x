@@ -61,11 +61,10 @@ export default function AnalyzePage() {
         </div>
 
         <h1 className="font-display text-4xl sm:text-6xl font-bold tracking-tight mb-4 text-white">
-          Analyze any <span className="text-gradient">public repository</span>
+          Understand any <span className="text-gradient">public repository</span>
         </h1>
         <p className="text-lab-textMuted text-sm sm:text-base max-w-md mx-auto mb-10 leading-relaxed">
-          Paste a GitHub URL and get an AI-powered architecture overview, module breakdown,
-          reading order, and deployment detection — instantly.
+          Paste a GitHub link and we'll walk you through the codebase — the architecture, how the modules fit together, and how it ships. No setup, no sign-up.
         </p>
 
         <div className="flex gap-2 max-w-md mx-auto mb-3">
@@ -82,13 +81,13 @@ export default function AnalyzePage() {
             disabled={busy || !repoUrl}
             onClick={() => void submit()}
           >
-            {busy ? "Analyzing…" : "Analyze"}
+            {busy ? "On it — hang tight…" : "Explain this repo"}
           </button>
         </div>
-        {error && <p className="text-xs text-rose-400 font-mono mt-2">{error}</p>}
+        {error && <p className="text-xs text-rose-400 mt-2 max-w-md mx-auto">{error}</p>}
 
-        <p className="text-xs text-lab-dim font-mono mt-6">
-          Only public repositories. Results expire after 7 days.
+        <p className="text-xs text-lab-dim mt-6">
+          Works with public GitHub repos · takes about a minute · results stay up for 7 days
         </p>
       </section>
     </div>
