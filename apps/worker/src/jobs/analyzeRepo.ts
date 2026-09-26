@@ -7,7 +7,6 @@ import { createArtifact } from "@vibe-coder/database/artifacts";
 import { Redis } from "ioredis";
 
 const prisma = new PrismaClient();
-
 const ANALYSIS_URL = process.env.ANALYSIS_SERVICE_URL ?? "http://localhost:8100";
 const RETRIEVAL_URL = process.env.RETRIEVAL_SERVICE_URL ?? "http://localhost:8200";
 const GENERATION_URL = process.env.GENERATION_SERVICE_URL ?? "http://localhost:8300";
@@ -159,6 +158,55 @@ async function collectSourceFiles(repoPath: string): Promise<{ path: string; con
 
   await walk(repoPath, "");
   return out;
+}
+
+/**
+ * Clone + codegraph-parse ONLY: no retrieval, no generation, no module
+ * upserts. Serves the lazy graph rebuild — old analyses created before the
+ * codegraph step existed (or whose parse failed) get a graph on demand when
+ * the tab asks, without paying for a full re-analysis.
+ *
+ * Writes the codegraph artifact itself (the full pipeline's step 4e writes it
+ * only on the success path of a whole analysis) so the API can see that the
+ * rebuild happened. Best-effort: failures log and mark the artifact-less repo,
+ * and the tab keeps its honest "no graph" state.
+ */
+export async function rebuildGraph(data: { repoId: string; fullName: string }) {
+  const { repoId, fullName } = data;
+  let dir: string | null = null;
+  try {
+    dir = await mkdtemp(join(tmpdir(), "vibecoder-cg-"));
+    const cloneUrl = `https://github.com/${fullName}.git`;
+    console.log(`[worker] rebuildGraph cloning ${fullName} to ${dir}`);
+    await simpleGit().clone(cloneUrl, dir, ["--depth", "1"]);
+
+    const files = await collectSourceFiles(dir);
+    const pyFiles = files.filter((f) => f.path.endsWith(".py"));
+    const cgRes = await fetch(`${CODEGRAPH_URL}/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repo_id: repoId, files: pyFiles }),
+    });
+    if (!cgRes.ok) {
+      const detail = await cgRes.text().catch(() => "");
+      throw new Error(`codegraph parse failed (HTTP ${cgRes.status}): ${detail.slice(0, 200)}`);
+    }
+    const cg = (await cgRes.json()) as { nodes?: number; edges?: number };
+    console.log(`[worker] rebuildGraph parsed ${cg.nodes ?? 0} node(s), ${cg.edges ?? 0} edge(s) for ${fullName}`);
+    await createArtifact(prisma, {
+      repoId,
+      artifactType: "codegraph",
+      content: { nodes: cg.nodes ?? 0, edges: cg.edges ?? 0 },
+    });
+  } finally {
+    if (dir) {
+      try {
+        await rm(dir, { recursive: true, force: true });
+      } catch (cleanupErr) {
+        console.warn(`[worker] rebuildGraph cleanup failed:`, cleanupErr);
+      }
+    }
+  }
 }
 
 export async function analyzeRepo(data: AnalyzeRepoData) {

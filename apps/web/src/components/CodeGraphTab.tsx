@@ -187,13 +187,45 @@ export function CodeGraphTab({ fetchGraph, explainNode, ask }: CodeGraphTabProps
   // Load the graph once. Same silent-refresh contract as FileGraphTab: a
   // fetcher identity change re-runs this, but rendered content is never
   // torn down — errors surface inline (TRD-F01 flicker lessons).
+  //
+  // GRAPH_GENERATING (202): the API lazily scheduled a rebuild for analyses
+  // created before the codegraph pipeline step existed — poll instead of
+  // showing the error, so old analyses self-heal on open.
   const graphLoadedRef = useRef(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (graphLoadedRef.current) return;
     graphLoadedRef.current = true;
-    fetchGraph()
-      .then((d) => setGraphData(d))
-      .catch((e) => setGraphError(e instanceof Error ? e.message : "Failed to load code graph"));
+    let cancelled = false;
+
+    const POLL_MS = 8000;
+    const MAX_POLLS = 30; // ~4 min, then surface the error honestly
+
+    const attempt = (n: number) => {
+      fetchGraph()
+        .then((d) => {
+          if (!cancelled) setGraphData(d);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          const generating =
+            e instanceof Error &&
+            "status" in e &&
+            (e as { status?: number }).status === 202;
+          if (generating && n < MAX_POLLS) {
+            setGraphError("Code graph is being generated — this page will refresh when it's ready…");
+            pollTimerRef.current = setTimeout(() => attempt(n + 1), POLL_MS);
+          } else {
+            setGraphError(e instanceof Error ? e.message : "Failed to load code graph");
+          }
+        });
+    };
+    attempt(0);
+
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
   }, [fetchGraph]);
 
   // Measure the wrapper for the canvas — never read window at render time.

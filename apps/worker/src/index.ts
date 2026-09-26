@@ -4,7 +4,7 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 
-import { analyzeRepo } from "./jobs/analyzeRepo";
+import { analyzeRepo, rebuildGraph } from "./jobs/analyzeRepo";
 import { assertMigrationsApplied } from "@vibe-coder/database/migrations";
 import { bootReadinessCheck, startHeartbeat } from "./readiness";
 
@@ -43,6 +43,11 @@ export const worker = new Worker(
   async (job) => {
     if (job.name === "analyze-repo") {
       await analyzeRepo(job.data);
+    } else if (job.name === "rebuild-graph") {
+      // Lazy Code Graph backfill for analyses created before the codegraph
+      // pipeline step existed (or whose parse failed). Cheap: clone + parse
+      // only. The API enqueues it when the tab asks for a missing graph.
+      await rebuildGraph(job.data as { repoId: string; fullName: string });
     }
   },
   { connection, concurrency: 2 }
