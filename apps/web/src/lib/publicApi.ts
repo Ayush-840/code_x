@@ -60,7 +60,12 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     );
   }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  // 202 GRAPH_GENERATING ships an ok:false envelope with a 2xx status: HTTP
+  // "accepted, not ready". Branching only on !res.ok silently resolved the
+  // promise with data:undefined and the CodeGraph tab spun forever with no
+  // message. Surface non-ok envelopes as errors regardless of status so the
+  // caller's 202-polling branch can run.
+  if (!res.ok || json.ok === false) {
     const err = (json as { error?: { code: string; message: string } }).error ?? {
       code: "UNKNOWN",
       message: "Request failed",

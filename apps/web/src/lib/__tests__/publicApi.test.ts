@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, publicPost, resolveApiUrl } from "@/lib/publicApi";
+import { ApiError, publicGet, publicPost, resolveApiUrl } from "@/lib/publicApi";
 import { request as authedRequest } from "@/lib/api";
 
 describe("resolveApiUrl (PRD-C03)", () => {
@@ -49,7 +49,33 @@ describe("publicPost network failure (PRD-C04)", () => {
     expect(apiErr.code).toBe("NETWORK_ERROR");
     expect(apiErr.message).toContain("http://localhost:4000");
     expect(apiErr.message).toContain("CORS");
-  });  it("still maps non-ok responses to the API's structured error", async () => {
+  });
+
+  it("maps a 202 ok:false envelope (GRAPH_GENERATING) to an error, not undefined data", async () => {
+    // 202 is 2xx, so res.ok is true — the ok:false envelope must be the error
+    // signal or callers polling "graph is generating" never see it (the
+    // CodeGraph tab spun forever on data:undefined before this fix).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "GRAPH_GENERATING", message: "Code graph is being generated." },
+          }),
+          { status: 202, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+
+    const err = await publicGet("/v1/public/abc/codegraph").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    const apiErr = err as ApiError;
+    expect(apiErr.status).toBe(202);
+    expect(apiErr.code).toBe("GRAPH_GENERATING");
+  });
+
+  it("still maps non-ok responses to the API's structured error", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -118,6 +144,24 @@ describe("authed request auto-refresh on TOKEN_EXPIRED", () => {
     // 2nd call is the refresh rotation, 3rd is the replayed original.
     expect(String(fetchMock.mock.calls[1][0])).toContain("/v1/auth/refresh");
     expect(String(fetchMock.mock.calls[2][0])).toContain("/v1/repos");
+  });
+
+  it("maps an authed 202 ok:false envelope (GRAPH_GENERATING) to an error too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json(
+          { ok: false, error: { code: "GRAPH_GENERATING", message: "generating" } },
+          202
+        )
+      )
+    );
+
+    const err = await authedRequest("/repos/x/graph").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    const apiErr = err as ApiError;
+    expect(apiErr.status).toBe(202);
+    expect(apiErr.code).toBe("GRAPH_GENERATING");
   });
 
   it("gives up after one refresh attempt (no retry loop when refresh fails)", async () => {

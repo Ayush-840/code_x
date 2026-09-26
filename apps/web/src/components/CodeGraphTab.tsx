@@ -190,33 +190,54 @@ export function CodeGraphTab({ fetchGraph, explainNode, ask }: CodeGraphTabProps
   //
   // GRAPH_GENERATING (202): the API lazily scheduled a rebuild for analyses
   // created before the codegraph pipeline step existed — poll instead of
-  // showing the error, so old analyses self-heal on open.
+  // showing the error, so old analyses self-heal on open. The generating
+  // state is tracked separately from hard errors so the UI can reflect it
+  // (spinner + attempt count) instead of a red error banner or a bare
+  // "Loading graph…" that never resolves.
   const graphLoadedRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [pollAttempts, setPollAttempts] = useState(0);
   useEffect(() => {
     if (graphLoadedRef.current) return;
     graphLoadedRef.current = true;
     let cancelled = false;
 
-    const POLL_MS = 8000;
-    const MAX_POLLS = 30; // ~4 min, then surface the error honestly
+    // Front-loaded schedule: the rebuild is usually a clone + parse of a
+    // shallow clone (~10-30s), so early attempts are cheap and frequent,
+    // then back off — total patience ~5 min before an honest error.
+    const POLL_SCHEDULE_MS = [2000, 4000, 4000, 6000, 6000, 8000];
+    const pollMs = (n: number) => POLL_SCHEDULE_MS[Math.min(n, POLL_SCHEDULE_MS.length - 1)];
+    const MAX_POLLS = 60;
 
     const attempt = (n: number) => {
       fetchGraph()
         .then((d) => {
-          if (!cancelled) setGraphData(d);
+          if (!cancelled) {
+            setGraphData(d);
+            setGenerating(false);
+          }
         })
         .catch((e) => {
           if (cancelled) return;
-          const generating =
+          const generatingResponse =
             e instanceof Error &&
             "status" in e &&
             (e as { status?: number }).status === 202;
-          if (generating && n < MAX_POLLS) {
-            setGraphError("Code graph is being generated — this page will refresh when it's ready…");
-            pollTimerRef.current = setTimeout(() => attempt(n + 1), POLL_MS);
+          if (generatingResponse && n < MAX_POLLS) {
+            setGenerating(true);
+            setGraphError(null);
+            setPollAttempts(n + 1);
+            pollTimerRef.current = setTimeout(() => attempt(n + 1), pollMs(n));
           } else {
-            setGraphError(e instanceof Error ? e.message : "Failed to load code graph");
+            setGenerating(false);
+            setGraphError(
+              generatingResponse
+                ? "The code graph is taking unusually long to generate. Reload this tab in a minute."
+                : e instanceof Error
+                  ? e.message
+                  : "Failed to load code graph"
+            );
           }
         });
     };
@@ -437,7 +458,19 @@ export function CodeGraphTab({ fetchGraph, explainNode, ask }: CodeGraphTabProps
             </button>
           )}
 
-          {!fgGraph && !graphError && (
+          {!fgGraph && !graphError && generating && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-lab-textMuted text-sm px-6 text-center">
+              <Loader2 className="w-5 h-5 animate-spin text-lab-blue" />
+              <span>Code graph is being generated — first build takes a moment…</span>
+              {pollAttempts > 0 && (
+                <span className="text-[11px] font-mono text-lab-textMuted/70">
+                  checking again in a few seconds ({pollAttempts})
+                </span>
+              )}
+            </div>
+          )}
+
+          {!fgGraph && !graphError && !generating && (
             <div className="flex items-center justify-center h-full text-lab-textMuted text-sm">
               <Loader2 className="w-5 h-5 animate-spin mr-2 text-lab-blue" />
               Loading graph…

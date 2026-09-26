@@ -65,7 +65,10 @@ export async function request<T>(
     );
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  // Same 202-envelope handling as publicApi.ts: GRAPH_GENERATING arrives with
+  // a 2xx status but ok:false — treat the envelope, not just the status, as
+  // the error signal so the CodeGraph tab's polling branch actually runs.
+  if (!res.ok || body.ok === false) {
     const err = (body as { error?: { code: string; message: string } }).error ?? {
       code: "UNKNOWN",
       message: "Request failed",

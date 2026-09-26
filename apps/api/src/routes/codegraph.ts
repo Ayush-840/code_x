@@ -121,10 +121,16 @@ async function maybeScheduleGraphRebuild(
     artifactType: "codegraph-rebuild",
     content: { requestedAt: new Date().toISOString() },
   });
+  // Unique jobId per enqueue: BullMQ silently DROPS an add whose jobId matches
+  // a job still in the completed/failed sets (kept by removeOnComplete/Fail),
+  // so the fixed `rebuild-graph:${repoId}` id meant one failed rebuild blocked
+  // every retry forever while the API kept answering 202 "generating". Dedup
+  // is already the marker artifact's job (one enqueue per window), so the id
+  // only needs uniqueness.
   await analysisQueue.add(
     "rebuild-graph",
     { repoId, fullName },
-    { jobId: `rebuild-graph:${repoId}` }
+    { jobId: `rebuild-graph:${repoId}:${Date.now()}` }
   );
   return { generating: true };
 }
