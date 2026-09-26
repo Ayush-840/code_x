@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useAuthRedirect } from "@/components/auth";
 import { useAuthedFetch } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
+import { friendlyStage } from "@/lib/stages";
 import { ArchitectureTab } from "@/components/tabs/ArchitectureTab";
 import { ModulesTab } from "@/components/tabs/ModulesTab";
 import { QuestionsTab } from "@/components/tabs/QuestionsTab";
@@ -162,12 +163,15 @@ export function ClientRepoPage({ repoId }: { repoId: string }) {
         <div style={S.analysisBanner}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ color: "var(--brand-400)", fontWeight: 600, fontSize: 14 }}>
-              ⚙ {analysisProgress.stage} — {analysisProgress.message}
+              ⚙ {friendlyStage(analysisProgress.stage).replace(/…$/, "")}
             </span>
             <span style={{ color: "var(--text-muted)", fontSize: 14 }}>{analysisProgress.progress}%</span>
           </div>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${analysisProgress.progress}%` }} />
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+            {analysisProgress.message || "This updates live — no need to refresh."}
           </div>
         </div>
       )}

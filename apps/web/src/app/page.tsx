@@ -112,7 +112,7 @@ export default function LandingPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-16 text-center relative z-10">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-lab-blueDim border border-lab-blue/30 text-[11px] font-mono uppercase tracking-wider text-lab-blue mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-lab-blue animate-pulse" />
-          AI-powered · Citation-grounded · Repository-connected
+          Every answer traced back to your real code
         </div>
 
         <h1 className="font-display text-5xl sm:text-7xl font-bold tracking-tight mb-6 leading-tight text-white">
@@ -123,14 +123,14 @@ export default function LandingPage() {
         </h1>
 
         <p className="text-lab-textMuted text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed font-sans">
-          Connect any GitHub repository and Vibe Coder builds an interview-ready study guide from your
-          actual code — architecture diagrams, module walkthroughs, a curated question bank, and a
-          live mock-interview simulator that scores your answers in real time.
+          Point us at a GitHub repo and we'll read it with you — the architecture, how each module
+          works, and the questions an interviewer would ask about it. Then practice out loud and
+          get scored, with every answer citing the exact lines it came from.
         </p>
 
         <div className="flex gap-4 justify-center flex-wrap mb-16">
           <MotionLink href="/login" className="btn btn-primary btn-lg flex items-center gap-2">
-            <span>Connect your repo</span>
+            <span>Start with your repo</span>
             <span>→</span>
           </MotionLink>
           <MotionLink href="#how" className="btn btn-ghost btn-lg">
